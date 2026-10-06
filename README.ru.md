@@ -85,7 +85,7 @@ sim/run.sh
 
 Прошивку написал Claude, ИИ-ассистент компании Anthropic: логику игр, экраны, обработку касаний и эмулятор.
 
-Идея и выбор игр принадлежат posoxAI. Обе игры перенесены с браузерных версий: [Сапёр](https://github.com/posoxAI/MinesweeperGame) и [Пять в линию](https://github.com/posoxAI/FiveInLineGame).
+Идея и выбор игр принадлежат posoxAI. Обе игры перенесены с браузерных оригиналов, в них можно поиграть прямо сейчас: «Сапёр» ([играть](https://posoxai.github.io/MinesweeperGame/), [код](https://github.com/posoxAI/MinesweeperGame)) и «Пять в линию» ([играть](https://posoxai.github.io/FiveInLineGame/), [код](https://github.com/posoxAI/FiveInLineGame)). Остальные игры собраны в [Игротеке](https://posoxai.github.io/posoxAI/).
 
 Буквы нарисованы шрифтами DejaVu, их можно свободно использовать и встраивать.
 

@@ -85,7 +85,7 @@ The script builds the games with `g++`, plays several hundred games of each to c
 
 The firmware was written by Claude, the AI assistant made by Anthropic: the game logic, the screens, the touch handling and the simulator.
 
-The idea and the choice of games came from posoxAI. Both games are ports of the browser versions: [Minesweeper](https://github.com/posoxAI/MinesweeperGame) and [Five in a Line](https://github.com/posoxAI/FiveInLineGame).
+The idea and the choice of games came from posoxAI. Both games are ports of browser originals, which can be played in a browser right now: Minesweeper ([play](https://posoxai.github.io/MinesweeperGame/), [code](https://github.com/posoxAI/MinesweeperGame)) and Five in a Line ([play](https://posoxai.github.io/FiveInLineGame/), [code](https://github.com/posoxAI/FiveInLineGame)). The other games on the shelf are at [Игротека](https://posoxai.github.io/posoxAI/).
 
 The letters are drawn from the DejaVu fonts, which are free to use and to embed.
 
