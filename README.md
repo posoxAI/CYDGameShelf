@@ -52,7 +52,7 @@ A game stays in memory while you are in the menu or in the other game. It is los
 - Sound: simple tones on the speaker connector. Nothing is heard unless a speaker is plugged in.
 - Screen: turns the picture by 180 degrees.
 - Colours: for boards that show the colours inverted.
-- Marks: a little sign inside every marble in Five in a Line — a dot, a ring, a bar and so on, one for each colour. It is on to begin with, because these panels render some colours close to each other. Turn it off for plain marbles.
+- Marble colours: four rows of colours for Five in a Line, shown one above the other at the size they have in the game. Panels differ from board to board, so the readable set is the one that looks readable on yours — pick it there. Three rows are ready-made; the fourth is yours, and tapping it opens a screen where each marble is given a colour out of a grid of squares. Reset puts the first set back. The picking screen also holds Marks: a little sign inside every marble, a dot, a ring, a bar and so on, one for each colour. Marks start on, because these panels render some colours close to each other; turn them off for plain marbles.
 - Touch calibration.
 - Reset best results.
 

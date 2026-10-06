@@ -51,6 +51,13 @@ static const char* const TEXT[S_COUNT][2] = {
   /* S_SET_RESET */      {"Сбросить рекорды", "Reset best results"},
   /* S_SET_RESET_SURE */ {"Точно сбросить?", "Really reset?"},
   /* S_SET_RESET_DONE */ {"Рекорды сброшены", "Best results reset"},
+
+  /* S_PAL_TITLE */      {"Цвета шариков", "Marble colours"},
+  /* S_PAL_HINT */       {"Выберите ряд. Четвёртый — свой.", "Pick a row. The fourth is yours."},
+  /* S_PAL_OWN */        {"Свой набор", "Your own set"},
+  /* S_PAL_OWN_HINT */   {"Шарик, затем цвет для него", "A marble, then a colour for it"},
+  /* S_PAL_RESET */      {"Сброс", "Reset"},
+  /* S_PAL_DONE */       {"Готово", "Done"},
 };
 
 const char* T(StrId id) { return TEXT[id][app::lang ? 1 : 0]; }

@@ -16,17 +16,20 @@ enum StrId {
   // settings
   S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS, S_SET_MARKS, S_ON, S_OFF, S_FLIP, S_NORMAL, S_INVERTED,
   S_SET_CAL, S_SET_RESET, S_SET_RESET_SURE, S_SET_RESET_DONE,
+  // picking the marble colours
+  S_PAL_TITLE, S_PAL_HINT, S_PAL_OWN, S_PAL_OWN_HINT, S_PAL_RESET, S_PAL_DONE,
   S_COUNT
 };
 const char* T(StrId id);
 
 namespace app {
 
-enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_SETTINGS };
+enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_SETTINGS, SCR_PALETTE, SCR_OWN };
 
 extern int lang;             // 0 Russian, 1 English
 extern bool soundOn, flip, invert;
 extern bool marks;           // a little sign inside every marble, for telling the colours apart
+extern int palette;          // which set of marble colours, picked on the device by the Marble colours screen
 
 // What the finger is doing. `pressed`, `released` and `longPress` are true for one pass of the loop only.
 struct Touch {
@@ -69,4 +72,11 @@ void update();
 int best();
 void resetBest();
 uint16_t ballColor(int c);           // colour 1..7 of a marble, so the menu icon matches the game
+int paletteCount();                  // sets to choose from; the last one is the player's own
+int presetCount();                   // of those, the ready-made ones
+void drawSample(int cx, int cy, int r, int c, int pal);   // one marble of any set, for the picking screen
+void loadCustom();                   // reads the player's own set out of flash
+void customGet(int c, int& r, int& g, int& b);
+void customSet(int c, int r, int g, int b);               // keeps it in flash straight away
+void customFromPreset(int pal);
 }

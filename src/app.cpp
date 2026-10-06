@@ -7,6 +7,7 @@ namespace app {
 int lang = 0;
 bool soundOn = true, flip = false, invert = false;
 bool marks = true;
+int palette = 0;
 Touch touch = {false, false, false, false, false, 0, 0, 0};
 
 static Screen current = SCR_MENU;
@@ -232,10 +233,11 @@ static void updateMenu() {
 
 /* ---------- settings ---------- */
 
-static const int ROW_Y[5] = {40, 74, 108, 142, 176};
-static const ui::Rect SET_RU = {100, 40, 60, 32}, SET_EN = {168, 40, 60, 32}, SET_SOUND = {100, 74, 128, 32},
-                      SET_FLIP = {100, 108, 128, 32}, SET_INV = {100, 142, 128, 32}, SET_MARKS = {100, 176, 128, 32},
-                      SET_CAL = {12, 214, 216, 30}, SET_RESET = {12, 248, 216, 30}, SET_BACK = {12, 284, 216, 32};
+static const int ROW_Y[4] = {44, 78, 112, 146};
+static const ui::Rect SET_RU = {100, 44, 60, 32}, SET_EN = {168, 44, 60, 32}, SET_SOUND = {100, 78, 128, 32},
+                      SET_FLIP = {100, 112, 128, 32}, SET_INV = {100, 146, 128, 32},
+                      SET_PAL = {12, 186, 216, 30}, SET_CAL = {12, 220, 216, 30},
+                      SET_RESET = {12, 254, 216, 30}, SET_BACK = {12, 288, 216, 30};
 static uint32_t resetArmedAt = 0;
 static bool resetDone = false;
 
@@ -249,16 +251,16 @@ static void drawReset() {
              armed ? C_ON_ACCENT : C_INK, armed ? C_DANGER : C_PANEL);
 }
 static void drawSettings() {
-  static const StrId names[5] = {S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS, S_SET_MARKS};
+  static const StrId names[4] = {S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS};
   hw::fillRect(0, 0, hw::W, hw::H, C_BG);
-  ui::label(0, 2, hw::W, 34, T(S_SETTINGS), FONT_L, C_INK, C_BG);
-  for (int k = 0; k < 5; k++) ui::label(12, ROW_Y[k], 86, 32, T(names[k]), FONT_M, C_MUTED, C_BG, ui::LEFT);
+  ui::label(0, 6, hw::W, 34, T(S_SETTINGS), FONT_L, C_INK, C_BG);
+  for (int k = 0; k < 4; k++) ui::label(12, ROW_Y[k], 86, 32, T(names[k]), FONT_M, C_MUTED, C_BG, ui::LEFT);
   toggle(SET_RU, "RU", lang == 0);
   toggle(SET_EN, "EN", lang == 1);
   toggle(SET_SOUND, T(soundOn ? S_ON : S_OFF), soundOn);
   toggle(SET_FLIP, T(S_FLIP), flip);
   toggle(SET_INV, T(invert ? S_INVERTED : S_NORMAL), invert);
-  toggle(SET_MARKS, T(marks ? S_ON : S_OFF), marks);
+  toggle(SET_PAL, T(S_PAL_TITLE), false);
   toggle(SET_CAL, T(S_SET_CAL), false);
   drawReset();
   toggle(SET_BACK, T(S_MENU), false);
@@ -279,11 +281,145 @@ static void updateSettings() {
   else if (SET_SOUND.has(x, y)) { soundOn = !soundOn; hw::saveInt("sound", soundOn); }
   else if (SET_FLIP.has(x, y)) { flip = !flip; hw::saveInt("flip", flip); hw::setFlip(flip); }
   else if (SET_INV.has(x, y)) { invert = !invert; hw::saveInt("inv", invert); hw::setInvert(invert); }
-  else if (SET_MARKS.has(x, y)) { marks = !marks; hw::saveInt("marks", marks); }
+  else if (SET_PAL.has(x, y)) { snd::play(880, 25); go(SCR_PALETTE); return; }
   else if (SET_CAL.has(x, y)) { snd::play(880, 25); calibrate(); }
   else if (SET_BACK.has(x, y)) { snd::play(880, 25); go(SCR_MENU); return; }
   else redraw = false;
   if (redraw) { snd::play(880, 25); drawSettings(); }
+}
+
+/* ---------- the marble colours ---------- */
+
+// The sets of marble colours are shown side by side at the size they have in the game, because a cheap panel
+// renders colours its own way and only the board itself can settle which set is readable on it.
+static const int PAL_N = 4;        // three ready-made sets and the player's own
+static const ui::Rect PAL_ROW[PAL_N] = {{8, 60, 224, 36}, {8, 100, 224, 36}, {8, 140, 224, 36}, {8, 180, 224, 36}};
+static const ui::Rect PAL_MARKS = {100, 226, 128, 32}, PAL_BACK = {12, 274, 216, 32};
+
+static void drawPaletteRow(int k) {
+  const ui::Rect& r = PAL_ROW[k];
+  bool on = palette == k;
+  uint16_t bg = on ? C_PANEL : C_BG;
+  char num[4];
+  hw::fillRoundRect(r.x, r.y, r.w, r.h, 6, on ? C_ACCENT : C_LINE);
+  hw::fillRoundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 5, bg);
+  snprintf(num, sizeof num, "%d", k + 1);
+  ui::label(r.x + 4, r.y + 10, 22, 16, num, FONT_S, on ? C_INK : C_MUTED, bg);
+  for (int c = 1; c <= 7; c++) lines::drawSample(46 + (c - 1) * 26, r.y + 18, 10, c, k);
+}
+static void drawPalette() {
+  hw::fillRect(0, 0, hw::W, hw::H, C_BG);
+  ui::label(0, 4, hw::W, 34, T(S_PAL_TITLE), FONT_L, C_INK, C_BG);
+  ui::label(0, 40, hw::W, 18, T(S_PAL_HINT), FONT_S, C_MUTED, C_BG);
+  for (int k = 0; k < PAL_N; k++) drawPaletteRow(k);
+  ui::label(12, 226, 86, 32, T(S_SET_MARKS), FONT_M, C_MUTED, C_BG, ui::LEFT);
+  toggle(PAL_MARKS, T(marks ? S_ON : S_OFF), marks);
+  toggle(PAL_BACK, T(S_SETTINGS), false);
+}
+static void updatePalette() {
+  if (!touch.pressed) return;
+  int x = touch.x, y = touch.y;
+  for (int k = 0; k < PAL_N; k++) if (PAL_ROW[k].has(x, y)) {
+    snd::play(880, 25);
+    if (palette != k) {
+      int was = palette;
+      palette = k;
+      hw::saveInt("pal", palette);
+      drawPaletteRow(was); drawPaletteRow(k);
+    }
+    if (k >= lines::presetCount()) go(SCR_OWN);     // the last row is the player's own: open it for changing
+    return;
+  }
+  if (PAL_MARKS.has(x, y)) {
+    marks = !marks;
+    hw::saveInt("marks", marks);
+    snd::play(880, 25);
+    toggle(PAL_MARKS, T(marks ? S_ON : S_OFF), marks);
+    for (int k = 0; k < PAL_N; k++) drawPaletteRow(k);     // the signs come and go with it
+    return;
+  }
+  if (PAL_BACK.has(x, y)) { snd::play(880, 25); go(SCR_SETTINGS); }
+}
+
+/* ---------- the player's own set of colours ---------- */
+
+// A marble at the top, then a square from the grid below, and that marble has that colour. The grid is squares
+// rather than sliders on purpose: a resistive panel hits a large square every time and a thin slider never.
+static const ui::Rect OWN_RESET = {12, 272, 104, 32}, OWN_DONE = {124, 272, 104, 32};
+static const int OWN_COLS = 8, OWN_ROWS = 5, OWN_SW = 28, OWN_GX = 8, OWN_GY = 96;
+static const int HUES[OWN_COLS] = {0, 30, 55, 120, 175, 220, 275, 320};
+static const int LEVEL_S[4] = {100, 100, 100, 50}, LEVEL_V[4] = {100, 72, 48, 100};
+static const int GREY_V[OWN_COLS] = {22, 36, 50, 64, 76, 86, 94, 100};   // the bottom row: no colour at all
+static int ownPick = 1;              // the marble being changed
+
+static ui::Rect ownCell(int k) { return ui::Rect{15 + k * 30, 56, 30, 30}; }
+static ui::Rect ownSwatch(int col, int row) { return ui::Rect{OWN_GX + col * OWN_SW, OWN_GY + row * 30, OWN_SW, 28}; }
+
+// h 0..359, s and v 0..100
+static void hsv(int h, int s, int v, int& r, int& g, int& b) {
+  int rem = h % 60, p = v * (100 - s) / 100, q = v * (100 - s * rem / 60) / 100,
+      t = v * (100 - s * (60 - rem) / 60) / 100, R, G, B;
+  switch (h / 60) {
+    case 0:  R = v; G = t; B = p; break;
+    case 1:  R = q; G = v; B = p; break;
+    case 2:  R = p; G = v; B = t; break;
+    case 3:  R = p; G = q; B = v; break;
+    case 4:  R = t; G = p; B = v; break;
+    default: R = v; G = p; B = q; break;
+  }
+  r = R * 255 / 100; g = G * 255 / 100; b = B * 255 / 100;
+}
+static void ownSwatchColor(int col, int row, int& r, int& g, int& b) {
+  if (row < 4) hsv(HUES[col], LEVEL_S[row], LEVEL_V[row], r, g, b);
+  else r = g = b = GREY_V[col] * 255 / 100;
+}
+
+static void drawOwnCell(int k) {
+  ui::Rect r = ownCell(k);
+  bool on = ownPick == k + 1;
+  hw::fillRoundRect(r.x, r.y, r.w, r.h, 5, on ? C_ACCENT : C_BG);
+  hw::fillRoundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 4, C_BG);
+  lines::drawSample(r.x + r.w / 2, r.y + r.h / 2, 10, k + 1, lines::paletteCount() - 1);
+}
+static void drawOwn() {
+  int r, g, b;
+  hw::fillRect(0, 0, hw::W, hw::H, C_BG);
+  ui::label(0, 2, hw::W, 32, T(S_PAL_OWN), FONT_L, C_INK, C_BG);
+  ui::label(0, 36, hw::W, 16, T(S_PAL_OWN_HINT), FONT_S, C_MUTED, C_BG);
+  for (int k = 0; k < 7; k++) drawOwnCell(k);
+  for (int row = 0; row < OWN_ROWS; row++) for (int col = 0; col < OWN_COLS; col++) {
+    ui::Rect s = ownSwatch(col, row);
+    ownSwatchColor(col, row, r, g, b);
+    hw::fillRect(s.x, s.y, s.w - 1, s.h - 1, RGB(r, g, b));
+  }
+  ui::button(OWN_RESET.x, OWN_RESET.y, OWN_RESET.w, OWN_RESET.h, T(S_PAL_RESET), FONT_M, C_INK, C_PANEL);
+  ui::button(OWN_DONE.x, OWN_DONE.y, OWN_DONE.w, OWN_DONE.h, T(S_PAL_DONE), FONT_M, C_ON_ACCENT, C_ACCENT);
+}
+static void updateOwn() {
+  if (!touch.pressed) return;
+  int x = touch.x, y = touch.y, r, g, b;
+  for (int k = 0; k < 7; k++) if (ownCell(k).has(x, y)) {
+    int was = ownPick;
+    ownPick = k + 1;
+    snd::play(560, 30);
+    drawOwnCell(was - 1); drawOwnCell(k);
+    return;
+  }
+  for (int row = 0; row < OWN_ROWS; row++) for (int col = 0; col < OWN_COLS; col++) {
+    if (!ownSwatch(col, row).has(x, y)) continue;
+    ownSwatchColor(col, row, r, g, b);
+    lines::customSet(ownPick, r, g, b);
+    snd::play(880, 25);
+    drawOwnCell(ownPick - 1);
+    return;
+  }
+  if (OWN_RESET.has(x, y)) {
+    lines::customFromPreset(0);
+    snd::play(440, 80);
+    for (int k = 0; k < 7; k++) drawOwnCell(k);
+    return;
+  }
+  if (OWN_DONE.has(x, y)) { snd::play(880, 25); go(SCR_PALETTE); }
 }
 
 /* ---------- screens ---------- */
@@ -294,6 +430,8 @@ void go(Screen s) {
   resetArmedAt = 0; resetDone = false;
   if (s == SCR_MENU) drawMenu();
   else if (s == SCR_SETTINGS) drawSettings();
+  else if (s == SCR_PALETTE) drawPalette();
+  else if (s == SCR_OWN) drawOwn();
   else if (s == SCR_MINES) mines::enter();
   else lines::enter();
 }
@@ -305,6 +443,9 @@ void setup() {
   flip = hw::loadInt("flip", 0) != 0;
   invert = hw::loadInt("inv", 0) != 0;
   marks = hw::loadInt("marks", 1) != 0;
+  lines::loadCustom();
+  palette = hw::loadInt("pal", 0);
+  if (palette < 0 || palette >= lines::paletteCount()) palette = 0;
   loadCal();
   hw::setFlip(flip);
   hw::setInvert(invert);
@@ -334,6 +475,8 @@ void loop() {
   snd::tick();
   if (current == SCR_MENU) updateMenu();
   else if (current == SCR_SETTINGS) updateSettings();
+  else if (current == SCR_PALETTE) updatePalette();
+  else if (current == SCR_OWN) updateOwn();
   else if (current == SCR_MINES) mines::update();
   else lines::update();
   hw::sleepMs(3);

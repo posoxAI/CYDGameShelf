@@ -11,13 +11,54 @@ static const int CELL = 26, X0 = 3, Y0 = 38, STATUS_Y = 274, R = 10;
 static const ui::Rect B_MENU = {4, 292, 74, 26}, B_NEW = {83, 292, 153, 26};
 
 static const uint16_t CELL_BG = RGB(24, 33, 43), GRID = RGB(44, 58, 72), SEL_BG = RGB(47, 66, 86);
-// Seven colours that stay apart on a cheap panel. Only two of them are cool: a violet here would sit between
-// the teal and the blue and all three would blur, so the sixth colour is a warm pink instead. Brightness
-// separates them as well as hue, because the panel washes light colours out: white is the brightest, the teal
-// sits in the middle and the blue is deliberately dark. The yellow is pulled towards amber, since too much
-// green in it reads as olive.
-static const uint8_t BALL[COLORS + 1][3] = {{0, 0, 0}, {235, 50, 45}, {255, 165, 0}, {50, 195, 65}, {0, 175, 190},
-                                            {45, 85, 230}, {255, 95, 180}, {238, 242, 246}};
+// Three sets of marble colours. How a colour really looks depends on the panel, and these panels differ from
+// one board to the next, so the set is picked on the device itself: Settings -> Marble colours. No picture of
+// a computer screen can settle this.
+//   0  Bright: seven hues with a white marble. Only two of them are cool, because a violet would sit between
+//      the teal and the blue and all three would blur. Brightness separates them as well as hue: white is the
+//      brightest, the teal sits in the middle, the blue is deliberately dark. The yellow is pulled towards
+//      amber, since too much green in it reads as olive.
+//   1  No white: the white marble becomes orange, so no marble competes with the light colours at all.
+//   2  Okabe-Ito: the set drawn up for colour-blind readers, where every pair differs by more than its hue.
+static const int PALETTES = 3;
+static const uint8_t BALL[PALETTES][COLORS + 1][3] = {
+  {{0, 0, 0}, {235, 50, 45}, {255, 165, 0}, {50, 195, 65}, {0, 175, 190}, {45, 85, 230}, {255, 95, 180}, {238, 242, 246}},
+  {{0, 0, 0}, {230, 45, 40}, {255, 120, 10}, {250, 210, 50}, {55, 200, 70}, {0, 180, 200}, {60, 100, 245}, {255, 100, 190}},
+  {{0, 0, 0}, {213, 94, 0}, {230, 159, 0}, {240, 228, 66}, {0, 158, 115}, {86, 180, 233}, {0, 114, 178}, {204, 121, 167}},
+};
+// After the ready-made sets comes one the player puts together on the Your own set screen. It starts as a copy
+// of the first set and lives in flash, one colour per key.
+static uint8_t custom[COLORS + 1][3];
+
+static int comp(int pal, int c, int k) { return pal < PALETTES ? BALL[pal][c][k] : custom[c][k]; }
+
+int paletteCount() { return PALETTES + 1; }
+int presetCount() { return PALETTES; }
+void customGet(int c, int& r, int& g, int& b) { r = custom[c][0]; g = custom[c][1]; b = custom[c][2]; }
+
+static void saveCustom(int c) {
+  char key[8];
+  snprintf(key, sizeof key, "cc%d", c);
+  hw::saveInt(key, (int32_t)(((int32_t)custom[c][0] << 16) | ((int32_t)custom[c][1] << 8) | custom[c][2]));
+}
+void customSet(int c, int r, int g, int b) {
+  custom[c][0] = (uint8_t)r; custom[c][1] = (uint8_t)g; custom[c][2] = (uint8_t)b;
+  saveCustom(c);
+}
+void customFromPreset(int pal) {
+  for (int c = 1; c <= COLORS; c++) {
+    for (int k = 0; k < 3; k++) custom[c][k] = BALL[pal][c][k];
+    saveCustom(c);
+  }
+}
+void loadCustom() {
+  char key[8];
+  for (int c = 1; c <= COLORS; c++) {
+    snprintf(key, sizeof key, "cc%d", c);
+    int32_t v = hw::loadInt(key, -1);
+    for (int k = 0; k < 3; k++) custom[c][k] = v < 0 ? BALL[0][c][k] : (uint8_t)(v >> (16 - 8 * k));
+  }
+}
 // The marble ink: dark on the light colours, light on the dark ones.
 static const uint16_t MARK_DARK = RGB(10, 14, 18), MARK_LIGHT = RGB(242, 246, 250);
 
@@ -30,27 +71,27 @@ static char statusText[72] = "";
 
 /* ---------- drawing ---------- */
 
-static uint16_t shade(int c, int percent) {      // 100 is the colour itself, less is darker, more is lighter
+static uint16_t shade(int pal, int c, int percent) {   // 100 is the colour itself, less is darker, more is lighter
   int v[3];
   for (int k = 0; k < 3; k++) {
-    int base = BALL[c][k];
+    int base = comp(pal, c, k);
     v[k] = percent <= 100 ? base * percent / 100 : base + (255 - base) * (percent - 100) / 100;
   }
   return RGB(v[0], v[1], v[2]);
 }
-uint16_t ballColor(int c) { return shade(c, 100); }
+uint16_t ballColor(int c) { return shade(app::palette, c, 100); }
 
 // Besides its colour every marble carries its own little sign, so the colours can still be told apart on a
 // panel that renders them poorly. Settings -> Marks turns the signs off. The marbles of the growing and
 // shrinking animations are too small for a sign and go without.
-static void drawMark(int cx, int cy, int r, int c) {
+static void drawMark(int cx, int cy, int r, int c, int pal) {
   if (!app::marks || r < 5) return;
-  int luma = (BALL[c][0] * 299 + BALL[c][1] * 587 + BALL[c][2] * 114) / 1000;
+  int luma = (comp(pal, c, 0) * 299 + comp(pal, c, 1) * 587 + comp(pal, c, 2) * 114) / 1000;
   uint16_t ink = luma > 150 ? MARK_DARK : MARK_LIGHT;
   int s = r * 2 / 3, t = r >= 8 ? 3 : 2, d = s - 1;   // half the width of the sign, and the stroke width
   switch (c) {
     case 1: hw::fillCircle(cx, cy, s / 2 + 1, ink); break;                                          // a dot
-    case 2: hw::fillCircle(cx, cy, s, ink); hw::fillCircle(cx, cy, s - t, shade(c, 100)); break;     // a ring
+    case 2: hw::fillCircle(cx, cy, s, ink); hw::fillCircle(cx, cy, s - t, shade(pal, c, 100)); break;  // a ring
     case 3: hw::fillRect(cx - s, cy - t / 2, 2 * s + 1, t, ink); break;                              // a bar
     case 4: hw::fillRect(cx - s, cy - t / 2, 2 * s + 1, t, ink);                                     // a cross
             hw::fillRect(cx - t / 2, cy - s, t, 2 * s + 1, ink); break;
@@ -59,14 +100,15 @@ static void drawMark(int cx, int cy, int r, int c) {
     default: for (int k = 0; k < t; k++) hw::drawLine(cx - d + k, cy + d, cx + d + k - t + 1, cy - d, ink); break;  // a slash
   }
 }
-static void drawBall(int cx, int cy, int r, int c) {
+static void drawBall(int cx, int cy, int r, int c, int pal) {
   if (r < 1) return;
-  hw::fillCircle(cx, cy, r, shade(c, 72));        // the rim is only a little darker: too dark and the
+  hw::fillCircle(cx, cy, r, shade(pal, c, 72));   // the rim is only a little darker: too dark and the
                                                   // deeper colours sink into the background
-  if (r > 2) hw::fillCircle(cx, cy, r - 1, shade(c, 100));
-  if (r > 4) hw::fillCircle(cx - r * 3 / 8, cy - r * 3 / 8, r / 4, shade(c, 165));
-  drawMark(cx, cy, r, c);
+  if (r > 2) hw::fillCircle(cx, cy, r - 1, shade(pal, c, 100));
+  if (r > 4) hw::fillCircle(cx - r * 3 / 8, cy - r * 3 / 8, r / 4, shade(pal, c, 165));
+  drawMark(cx, cy, r, c, pal);
 }
+void drawSample(int cx, int cy, int r, int c, int pal) { drawBall(cx, cy, r, c, pal); }
 static int cellX(int i) { return X0 + (i % N) * CELL; }
 static int cellY(int i) { return Y0 + (i / N) * CELL; }
 // one cell: its background, the frame if it is the picked one, and a marble of the given colour and size
@@ -80,7 +122,7 @@ static void drawCell(int i, int color, int r) {
     hw::fillRect(x, y, CELL - 1, 2, C_ACCENT); hw::fillRect(x, y + CELL - 3, CELL - 1, 2, C_ACCENT);
     hw::fillRect(x, y, 2, CELL - 1, C_ACCENT); hw::fillRect(x + CELL - 3, y, 2, CELL - 1, C_ACCENT);
   }
-  if (color) drawBall(x + CELL / 2 - 1, y + CELL / 2 - 1, r, color);
+  if (color) drawBall(x + CELL / 2 - 1, y + CELL / 2 - 1, r, color, app::palette);
 }
 static void paintCell(int i) { drawCell(i, board[i], R); }
 static void paintScore() {
@@ -95,7 +137,7 @@ static void paintBest() {
 }
 static void paintNext() {
   hw::fillRect(90, 17, 60, 19, C_BG);
-  for (int k = 0; k < nextN && k < PER_TURN; k++) drawBall(104 + k * 16, 26, 6, nextB[k]);
+  for (int k = 0; k < nextN && k < PER_TURN; k++) drawBall(104 + k * 16, 26, 6, nextB[k], app::palette);
 }
 static void paintStatus() {
   uint16_t color = confirmAt ? C_INK : (over ? (overRecord ? C_GOOD : C_DANGER) : C_MUTED);

@@ -193,13 +193,16 @@ static void testTexts() {
   printf("texts\n");
   int tooWide = 0;
   static const StrId STATUS[] = {S_M_READY, S_M_PLAY, S_M_PLAY_FLAG, S_M_WON, S_M_WON_BEST, S_M_LOST, S_M_CONFIRM, S_L_PROMPT, S_L_PICKED,
-                                 S_L_PICK_FIRST, S_L_BLOCKED, S_L_LINE, S_L_LUCKY, S_L_OVER, S_L_OVER_BEST, S_L_CONFIRM, S_FOOT, S_PICK};
+                                 S_L_PICK_FIRST, S_L_BLOCKED, S_L_LINE, S_L_LUCKY, S_L_OVER, S_L_OVER_BEST, S_L_CONFIRM, S_FOOT, S_PICK,
+                                 S_PAL_HINT, S_PAL_OWN_HINT};
   struct Fit { StrId id; int width; const Font* font; };
   static const Fit BUTTONS[] = {{S_MENU, 64, &FONT_M}, {S_M_NEW, 62, &FONT_M}, {S_M_DIG, 64, &FONT_M}, {S_M_FLAG, 64, &FONT_M}, {S_L_NEW, 143, &FONT_M},
                                 {S_MINES, 154, &FONT_M}, {S_LINES, 154, &FONT_M}, {S_SETTINGS, 206, &FONT_M}, {S_TITLE, 236, &FONT_L}, {S_SET_LANG, 86, &FONT_M},
                                 {S_SET_SOUND, 86, &FONT_M}, {S_SET_SCREEN, 86, &FONT_M}, {S_SET_COLORS, 86, &FONT_M}, {S_SET_MARKS, 86, &FONT_M}, {S_FLIP, 118, &FONT_M},
                                 {S_NORMAL, 118, &FONT_M}, {S_INVERTED, 118, &FONT_M}, {S_SET_CAL, 206, &FONT_M}, {S_SET_RESET, 206, &FONT_M},
-                                {S_SET_RESET_SURE, 206, &FONT_M}, {S_SET_RESET_DONE, 206, &FONT_M}, {S_L_SCORE, 76, &FONT_S}, {S_L_NEXT, 72, &FONT_S}, {S_BEST, 76, &FONT_S}};
+                                {S_SET_RESET_SURE, 206, &FONT_M}, {S_SET_RESET_DONE, 206, &FONT_M}, {S_L_SCORE, 76, &FONT_S}, {S_L_NEXT, 72, &FONT_S}, {S_BEST, 76, &FONT_S},
+                                {S_PAL_TITLE, 206, &FONT_M}, {S_PAL_TITLE, 236, &FONT_L}, {S_PAL_OWN, 236, &FONT_L},
+                                {S_PAL_RESET, 94, &FONT_M}, {S_PAL_DONE, 94, &FONT_M}};
   for (app::lang = 0; app::lang < 2; app::lang++) {
     for (size_t k = 0; k < sizeof STATUS / sizeof STATUS[0]; k++) {
       char text[96];
@@ -330,30 +333,72 @@ static void testScreens() {
   sim::shot("16-lines-over");
   tap(40, 305);
 
-  // settings: language, flip (touch must still land), the marks on the marbles, reset
+  // settings: language, flip (touch must still land), the marble colours, reset
   tap(120, 236);
   sim::shot("17-settings-ru");
-  tap(198, 56);
+  tap(198, 60);
   check(app::lang == 1, "EN switches the language");
   sim::shot("18-settings-en");
-  tap(164, 124);
+  tap(164, 128);
   check(app::flip, "Turn over flips the screen");
-  tap(120, 300);
+  tap(120, 303);
   check(app::simScreen() == app::SCR_MENU, "after the flip the touch still lands where the picture is");
   sim::shot("19-menu-en");
   tap(120, 107); sim::shot("20-mines-en"); tap(40, 305);
   tap(120, 173); sim::shot("21-lines-en"); tap(40, 305);
-  tap(120, 236); tap(164, 124);
+  tap(120, 236); tap(164, 128);
   check(!app::flip, "and flips back");
-  check(app::marks, "the marks on the marbles start on");
-  tap(164, 192);
+
+  // the sets of marble colours and the marks are picked on their own screen
+  tap(120, 201);
+  check(app::simScreen() == app::SCR_PALETTE, "Marble colours opens the picking screen");
+  check(app::palette == 0 && app::marks, "it starts on the first set with the marks on");
+  sim::shot("22-palette");
+  tap(120, 118);
+  check(app::palette == 1, "a tap picks the second set");
+  tap(164, 242);
   check(!app::marks, "Marks turns the signs on the marbles off");
-  tap(120, 300); tap(120, 173); sim::shot("22-lines-no-marks"); tap(40, 305);
-  tap(120, 236); tap(164, 192);
-  check(app::marks, "and on again");
-  tap(120, 262); sim::shot("23-settings-reset-armed"); tap(120, 262);
+  sim::shot("23-palette-second-no-marks");
+  tap(120, 290);
+  check(app::simScreen() == app::SCR_SETTINGS, "and the screen leads back to settings");
+  tap(120, 303); tap(120, 173); sim::shot("24-lines-set-2"); tap(40, 305);
+  tap(120, 236); tap(120, 201); tap(120, 158);
+  check(app::palette == 2, "the third set can be picked too");
+  tap(120, 290); tap(120, 303); tap(120, 173); sim::shot("25-lines-set-3"); tap(40, 305);
+
+  // the fourth row is the player's own set, and picking it opens the screen that changes it
+  int r0, g0, b0, r1, g1, b1;
+  lines::customGet(2, r0, g0, b0);
+  tap(120, 236); tap(120, 201); tap(120, 198);
+  check(app::palette == 3 && app::simScreen() == app::SCR_OWN, "the fourth row is the player's own and opens for changing");
+  sim::shot("26-own-colours");
+  tap(60, 71);                                                 // the second marble
+  tap(22, 110);                                                // the first square of the grid: a vivid red
+  lines::customGet(2, r1, g1, b1);
+  check(r1 == 255 && !g1 && !b1, "a marble takes the colour of the square that is tapped");
+  check(r1 != r0 || g1 != g0 || b1 != b0, "which is not the colour it had");
+  tap(190, 230);                                               // and a square of the bottom row
+  lines::customGet(2, r1, g1, b1);
+  check(r1 == g1 && g1 == b1 && r1 > 200, "the bottom row of the grid holds colours with no hue at all");
+  sim::shot("27-own-changed");
+  tap(176, 288);
+  check(app::simScreen() == app::SCR_PALETTE, "Done leads back to the sets");
+  tap(120, 290); tap(120, 303); tap(120, 173);
+  sim::shot("28-lines-own");                                   // the board is drawn with the changed set
+  tap(40, 305);
+  // in again, put the set back and return to the first one
+  tap(120, 236); tap(120, 201); tap(120, 198);
+  tap(64, 288);
+  lines::customGet(2, r1, g1, b1);
+  check(r1 == r0 && g1 == g0 && b1 == b0, "Reset puts the first set back");
+  tap(176, 288);
+  tap(120, 78); tap(164, 242);
+  check(app::palette == 0 && app::marks, "the first set and the marks come back");
+  tap(120, 290);
+
+  tap(120, 269); sim::shot("29-settings-reset-armed"); tap(120, 269);
   check(mines::bestTenths(0) == 0 && lines::best() == 0, "Reset best results clears them after a second press");
-  tap(120, 300);
+  tap(120, 303);
 
   // power cycle: nothing is asked again, the language is kept
   int tonesBefore = sim::tones();
