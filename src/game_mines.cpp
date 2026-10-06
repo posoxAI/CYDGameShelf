@@ -19,8 +19,10 @@ static const ui::Rect B_NEW = {84, 4, 72, 28}, B_MENU = {4, 292, 74, 26}, B_SIZE
 static const uint16_t TILE = RGB(58, 74, 92), TILE_HI = RGB(88, 106, 127), TILE_LO = RGB(36, 48, 61);
 static const uint16_t OPEN_BG = RGB(24, 33, 43), GRID = RGB(44, 58, 72), FLAG_RED = RGB(255, 90, 77), BOOM_BG = RGB(190, 40, 34);
 static const uint16_t MINE_INK = RGB(205, 214, 222);
-static const uint16_t NUM[9] = {0, RGB(127, 176, 255), RGB(116, 208, 138), RGB(255, 138, 128), RGB(179, 173, 255),
-                                RGB(232, 160, 122), RGB(99, 214, 214), RGB(230, 236, 238), RGB(154, 166, 172)};
+// The classic colours, pushed apart for a cheap panel: 4 is pink rather than a second blue, 5 is warm amber
+// rather than a second red, and 6 is a teal dark enough not to pass for 7.
+static const uint16_t NUM[9] = {0, RGB(95, 155, 255), RGB(90, 210, 110), RGB(255, 110, 100), RGB(255, 130, 200),
+                                RGB(235, 150, 60), RGB(40, 180, 190), RGB(240, 244, 248), RGB(150, 162, 170)};
 
 static uint8_t mine[256], adj[256], opn[256], flg[256], shown[256];
 static int sizeIdx = 0, cols = 9, rows = 9, mineCount = 10, cell = 26, x0 = 3, y0 = BOARD_TOP;

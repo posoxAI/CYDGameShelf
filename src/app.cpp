@@ -6,6 +6,7 @@ namespace app {
 
 int lang = 0;
 bool soundOn = true, flip = false, invert = false;
+bool marks = true;
 Touch touch = {false, false, false, false, false, 0, 0, 0};
 
 static Screen current = SCR_MENU;
@@ -217,8 +218,7 @@ static void drawMenu() {
   if (lines::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), lines::best());
   else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
   gameButton(MENU_LINES, T(S_LINES), sub);
-  static const uint16_t dots[3] = {RGB(240, 80, 74), RGB(245, 197, 43), RGB(54, 208, 224)};
-  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_LINES.x + 14 + k * 14, MENU_LINES.y + 29, 6, dots[k]);
+  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_LINES.x + 14 + k * 14, MENU_LINES.y + 29, 6, lines::ballColor(k + 1));
 
   ui::button(MENU_SET.x, MENU_SET.y, MENU_SET.w, MENU_SET.h, T(S_SETTINGS), FONT_M, C_INK, C_PANEL);
   ui::label(0, 296, hw::W, 16, T(S_FOOT), FONT_S, C_MUTED, C_BG);
@@ -232,10 +232,10 @@ static void updateMenu() {
 
 /* ---------- settings ---------- */
 
-static const int ROW_Y[4] = {46, 84, 122, 160};
-static const ui::Rect SET_RU = {100, 46, 60, 32}, SET_EN = {168, 46, 60, 32}, SET_SOUND = {100, 84, 128, 32},
-                      SET_FLIP = {100, 122, 128, 32}, SET_INV = {100, 160, 128, 32}, SET_CAL = {12, 200, 216, 32},
-                      SET_RESET = {12, 240, 216, 32}, SET_BACK = {12, 282, 216, 32};
+static const int ROW_Y[5] = {40, 74, 108, 142, 176};
+static const ui::Rect SET_RU = {100, 40, 60, 32}, SET_EN = {168, 40, 60, 32}, SET_SOUND = {100, 74, 128, 32},
+                      SET_FLIP = {100, 108, 128, 32}, SET_INV = {100, 142, 128, 32}, SET_MARKS = {100, 176, 128, 32},
+                      SET_CAL = {12, 214, 216, 30}, SET_RESET = {12, 248, 216, 30}, SET_BACK = {12, 284, 216, 32};
 static uint32_t resetArmedAt = 0;
 static bool resetDone = false;
 
@@ -249,15 +249,16 @@ static void drawReset() {
              armed ? C_ON_ACCENT : C_INK, armed ? C_DANGER : C_PANEL);
 }
 static void drawSettings() {
-  static const StrId names[4] = {S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS};
+  static const StrId names[5] = {S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS, S_SET_MARKS};
   hw::fillRect(0, 0, hw::W, hw::H, C_BG);
-  ui::label(0, 6, hw::W, 34, T(S_SETTINGS), FONT_L, C_INK, C_BG);
-  for (int k = 0; k < 4; k++) ui::label(12, ROW_Y[k], 86, 32, T(names[k]), FONT_M, C_MUTED, C_BG, ui::LEFT);
+  ui::label(0, 2, hw::W, 34, T(S_SETTINGS), FONT_L, C_INK, C_BG);
+  for (int k = 0; k < 5; k++) ui::label(12, ROW_Y[k], 86, 32, T(names[k]), FONT_M, C_MUTED, C_BG, ui::LEFT);
   toggle(SET_RU, "RU", lang == 0);
   toggle(SET_EN, "EN", lang == 1);
   toggle(SET_SOUND, T(soundOn ? S_ON : S_OFF), soundOn);
-  toggle(SET_FLIP, T(S_FLIP), false);
+  toggle(SET_FLIP, T(S_FLIP), flip);
   toggle(SET_INV, T(invert ? S_INVERTED : S_NORMAL), invert);
+  toggle(SET_MARKS, T(marks ? S_ON : S_OFF), marks);
   toggle(SET_CAL, T(S_SET_CAL), false);
   drawReset();
   toggle(SET_BACK, T(S_MENU), false);
@@ -278,6 +279,7 @@ static void updateSettings() {
   else if (SET_SOUND.has(x, y)) { soundOn = !soundOn; hw::saveInt("sound", soundOn); }
   else if (SET_FLIP.has(x, y)) { flip = !flip; hw::saveInt("flip", flip); hw::setFlip(flip); }
   else if (SET_INV.has(x, y)) { invert = !invert; hw::saveInt("inv", invert); hw::setInvert(invert); }
+  else if (SET_MARKS.has(x, y)) { marks = !marks; hw::saveInt("marks", marks); }
   else if (SET_CAL.has(x, y)) { snd::play(880, 25); calibrate(); }
   else if (SET_BACK.has(x, y)) { snd::play(880, 25); go(SCR_MENU); return; }
   else redraw = false;
@@ -302,6 +304,7 @@ void setup() {
   soundOn = hw::loadInt("sound", 1) != 0;
   flip = hw::loadInt("flip", 0) != 0;
   invert = hw::loadInt("inv", 0) != 0;
+  marks = hw::loadInt("marks", 1) != 0;
   loadCal();
   hw::setFlip(flip);
   hw::setInvert(invert);

@@ -11,9 +11,15 @@ static const int CELL = 26, X0 = 3, Y0 = 38, STATUS_Y = 274, R = 10;
 static const ui::Rect B_MENU = {4, 292, 74, 26}, B_NEW = {83, 292, 153, 26};
 
 static const uint16_t CELL_BG = RGB(24, 33, 43), GRID = RGB(44, 58, 72), SEL_BG = RGB(47, 66, 86);
-// seven colours chosen to stay apart from each other: no pink next to red, no orange next to yellow
-static const uint8_t BALL[COLORS + 1][3] = {{0, 0, 0}, {240, 80, 74}, {245, 197, 43}, {69, 190, 92}, {54, 208, 224},
-                                            {74, 118, 240}, {196, 92, 224}, {230, 236, 242}};
+// Seven colours that stay apart on a cheap panel. Only two of them are cool: a violet here would sit between
+// the teal and the blue and all three would blur, so the sixth colour is a warm pink instead. Brightness
+// separates them as well as hue, because the panel washes light colours out: white is the brightest, the teal
+// sits in the middle and the blue is deliberately dark. The yellow is pulled towards amber, since too much
+// green in it reads as olive.
+static const uint8_t BALL[COLORS + 1][3] = {{0, 0, 0}, {235, 50, 45}, {255, 165, 0}, {50, 195, 65}, {0, 175, 190},
+                                            {45, 85, 230}, {255, 95, 180}, {238, 242, 246}};
+// The marble ink: dark on the light colours, light on the dark ones.
+static const uint16_t MARK_DARK = RGB(10, 14, 18), MARK_LIGHT = RGB(242, 246, 250);
 
 static uint8_t board[CELLS];
 static uint8_t nextB[START];
@@ -32,11 +38,34 @@ static uint16_t shade(int c, int percent) {      // 100 is the colour itself, le
   }
   return RGB(v[0], v[1], v[2]);
 }
+uint16_t ballColor(int c) { return shade(c, 100); }
+
+// Besides its colour every marble carries its own little sign, so the colours can still be told apart on a
+// panel that renders them poorly. Settings -> Marks turns the signs off. The marbles of the growing and
+// shrinking animations are too small for a sign and go without.
+static void drawMark(int cx, int cy, int r, int c) {
+  if (!app::marks || r < 5) return;
+  int luma = (BALL[c][0] * 299 + BALL[c][1] * 587 + BALL[c][2] * 114) / 1000;
+  uint16_t ink = luma > 150 ? MARK_DARK : MARK_LIGHT;
+  int s = r * 2 / 3, t = r >= 8 ? 3 : 2, d = s - 1;   // half the width of the sign, and the stroke width
+  switch (c) {
+    case 1: hw::fillCircle(cx, cy, s / 2 + 1, ink); break;                                          // a dot
+    case 2: hw::fillCircle(cx, cy, s, ink); hw::fillCircle(cx, cy, s - t, shade(c, 100)); break;     // a ring
+    case 3: hw::fillRect(cx - s, cy - t / 2, 2 * s + 1, t, ink); break;                              // a bar
+    case 4: hw::fillRect(cx - s, cy - t / 2, 2 * s + 1, t, ink);                                     // a cross
+            hw::fillRect(cx - t / 2, cy - s, t, 2 * s + 1, ink); break;
+    case 5: hw::fillTriangle(cx, cy - s, cx - s, cy + s * 2 / 3, cx + s, cy + s * 2 / 3, ink); break;  // a triangle
+    case 6: hw::fillRect(cx - s + 2, cy - s + 2, 2 * s - 3, 2 * s - 3, ink); break;                  // a square
+    default: for (int k = 0; k < t; k++) hw::drawLine(cx - d + k, cy + d, cx + d + k - t + 1, cy - d, ink); break;  // a slash
+  }
+}
 static void drawBall(int cx, int cy, int r, int c) {
   if (r < 1) return;
-  hw::fillCircle(cx, cy, r, shade(c, 62));
+  hw::fillCircle(cx, cy, r, shade(c, 72));        // the rim is only a little darker: too dark and the
+                                                  // deeper colours sink into the background
   if (r > 2) hw::fillCircle(cx, cy, r - 1, shade(c, 100));
   if (r > 4) hw::fillCircle(cx - r * 3 / 8, cy - r * 3 / 8, r / 4, shade(c, 165));
+  drawMark(cx, cy, r, c);
 }
 static int cellX(int i) { return X0 + (i % N) * CELL; }
 static int cellY(int i) { return Y0 + (i / N) * CELL; }

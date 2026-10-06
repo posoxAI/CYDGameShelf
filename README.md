@@ -52,6 +52,7 @@ A game stays in memory while you are in the menu or in the other game. It is los
 - Sound: simple tones on the speaker connector. Nothing is heard unless a speaker is plugged in.
 - Screen: turns the picture by 180 degrees.
 - Colours: for boards that show the colours inverted.
+- Marks: a little sign inside every marble in Five in a Line — a dot, a ring, a bar and so on, one for each colour. It is on to begin with, because these panels render some colours close to each other. Turn it off for plain marbles.
 - Touch calibration.
 - Reset best results.
 
@@ -70,7 +71,7 @@ A game stays in memory while you are in the menu or in the other game. It is los
 sim/run.sh
 ```
 
-The script builds the games with `g++`, plays several hundred games of each to check the rules, drives every screen with a scripted finger and saves pictures of the screens to `sim/out`. It needs Python with Pillow for the pictures.
+The script builds the games with `g++`, plays several hundred games of each to check the rules, drives every screen with a scripted finger and saves pictures of the screens to `sim/out`. It needs `g++` and Python, nothing else.
 
 ## Files
 

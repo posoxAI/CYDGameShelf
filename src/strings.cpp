@@ -41,6 +41,7 @@ static const char* const TEXT[S_COUNT][2] = {
   /* S_SET_SOUND */      {"Звук", "Sound"},
   /* S_SET_SCREEN */     {"Экран", "Screen"},
   /* S_SET_COLORS */     {"Цвета", "Colours"},
+  /* S_SET_MARKS */      {"Метки", "Marks"},
   /* S_ON */             {"Вкл", "On"},
   /* S_OFF */            {"Выкл", "Off"},
   /* S_FLIP */           {"Перевернуть", "Turn over"},

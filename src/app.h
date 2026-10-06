@@ -14,7 +14,7 @@ enum StrId {
   S_L_SCORE, S_L_NEXT, S_L_NEW, S_L_PROMPT, S_L_PICKED, S_L_PICK_FIRST, S_L_BLOCKED, S_L_LINE, S_L_LUCKY,
   S_L_OVER, S_L_OVER_BEST, S_L_CONFIRM,
   // settings
-  S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS, S_ON, S_OFF, S_FLIP, S_NORMAL, S_INVERTED,
+  S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS, S_SET_MARKS, S_ON, S_OFF, S_FLIP, S_NORMAL, S_INVERTED,
   S_SET_CAL, S_SET_RESET, S_SET_RESET_SURE, S_SET_RESET_DONE,
   S_COUNT
 };
@@ -26,6 +26,7 @@ enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_SETTINGS };
 
 extern int lang;             // 0 Russian, 1 English
 extern bool soundOn, flip, invert;
+extern bool marks;           // a little sign inside every marble, for telling the colours apart
 
 // What the finger is doing. `pressed`, `released` and `longPress` are true for one pass of the loop only.
 struct Touch {
@@ -67,4 +68,5 @@ void enter();
 void update();
 int best();
 void resetBest();
+uint16_t ballColor(int c);           // colour 1..7 of a marble, so the menu icon matches the game
 }

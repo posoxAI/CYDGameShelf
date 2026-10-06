@@ -197,7 +197,7 @@ static void testTexts() {
   struct Fit { StrId id; int width; const Font* font; };
   static const Fit BUTTONS[] = {{S_MENU, 64, &FONT_M}, {S_M_NEW, 62, &FONT_M}, {S_M_DIG, 64, &FONT_M}, {S_M_FLAG, 64, &FONT_M}, {S_L_NEW, 143, &FONT_M},
                                 {S_MINES, 154, &FONT_M}, {S_LINES, 154, &FONT_M}, {S_SETTINGS, 206, &FONT_M}, {S_TITLE, 236, &FONT_L}, {S_SET_LANG, 86, &FONT_M},
-                                {S_SET_SOUND, 86, &FONT_M}, {S_SET_SCREEN, 86, &FONT_M}, {S_SET_COLORS, 86, &FONT_M}, {S_FLIP, 118, &FONT_M},
+                                {S_SET_SOUND, 86, &FONT_M}, {S_SET_SCREEN, 86, &FONT_M}, {S_SET_COLORS, 86, &FONT_M}, {S_SET_MARKS, 86, &FONT_M}, {S_FLIP, 118, &FONT_M},
                                 {S_NORMAL, 118, &FONT_M}, {S_INVERTED, 118, &FONT_M}, {S_SET_CAL, 206, &FONT_M}, {S_SET_RESET, 206, &FONT_M},
                                 {S_SET_RESET_SURE, 206, &FONT_M}, {S_SET_RESET_DONE, 206, &FONT_M}, {S_L_SCORE, 76, &FONT_S}, {S_L_NEXT, 72, &FONT_S}, {S_BEST, 76, &FONT_S}};
   for (app::lang = 0; app::lang < 2; app::lang++) {
@@ -330,24 +330,30 @@ static void testScreens() {
   sim::shot("16-lines-over");
   tap(40, 305);
 
-  // settings: language, flip (touch must still land), reset
+  // settings: language, flip (touch must still land), the marks on the marbles, reset
   tap(120, 236);
   sim::shot("17-settings-ru");
-  tap(198, 62);
+  tap(198, 56);
   check(app::lang == 1, "EN switches the language");
   sim::shot("18-settings-en");
-  tap(164, 138);
+  tap(164, 124);
   check(app::flip, "Turn over flips the screen");
-  tap(120, 298);
+  tap(120, 300);
   check(app::simScreen() == app::SCR_MENU, "after the flip the touch still lands where the picture is");
   sim::shot("19-menu-en");
   tap(120, 107); sim::shot("20-mines-en"); tap(40, 305);
   tap(120, 173); sim::shot("21-lines-en"); tap(40, 305);
-  tap(120, 236); tap(164, 138);
+  tap(120, 236); tap(164, 124);
   check(!app::flip, "and flips back");
-  tap(120, 256); sim::shot("22-settings-reset-armed"); tap(120, 256);
+  check(app::marks, "the marks on the marbles start on");
+  tap(164, 192);
+  check(!app::marks, "Marks turns the signs on the marbles off");
+  tap(120, 300); tap(120, 173); sim::shot("22-lines-no-marks"); tap(40, 305);
+  tap(120, 236); tap(164, 192);
+  check(app::marks, "and on again");
+  tap(120, 262); sim::shot("23-settings-reset-armed"); tap(120, 262);
   check(mines::bestTenths(0) == 0 && lines::best() == 0, "Reset best results clears them after a second press");
-  tap(120, 298);
+  tap(120, 300);
 
   // power cycle: nothing is asked again, the language is kept
   int tonesBefore = sim::tones();
