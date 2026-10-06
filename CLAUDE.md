@@ -1,16 +1,17 @@
 # CYD Game Shelf — notes for Claude
 
-Firmware for the ESP32-2432S028R "Cheap Yellow Display" (one micro-USB, ILI9341 240 × 320, XPT2046 resistive touch): a menu, Minesweeper and Five in a Line, in Russian and English. The whole thing is about 4700 lines and has no framework beyond Arduino and TFT_eSPI.
+Firmware for the ESP32-2432S028R "Cheap Yellow Display" (one micro-USB, ILI9341 240 × 320, XPT2046 resistive touch): a menu, Minesweeper, Five in a Line and Bubbles, in Russian and English. The whole thing is about 5300 lines and has no framework beyond Arduino and TFT_eSPI.
 
 ## Where the games come from
 
-Both games are ports of browser originals by posoxAI, each a single HTML file. When a rule is unclear — what scores, when a game ends, what the first click guarantees — **the original is the reference**, not a guess:
+Every game is a port of a browser original by posoxAI, each a single HTML file. When a rule is unclear — what scores, when a game ends, what the first click guarantees — **the original is the reference**, not a guess:
 
 - Minesweeper: [play](https://posoxai.github.io/MinesweeperGame/) · [code](https://github.com/posoxAI/MinesweeperGame)
 - Five in a Line: [play](https://posoxai.github.io/FiveInLineGame/) · [code](https://github.com/posoxAI/FiveInLineGame)
+- Bubbles: [play](https://posoxai.github.io/Bubbles/) · [code](https://github.com/posoxAI/Bubbles)
 - the rest of the shelf: [Игротека](https://posoxai.github.io/posoxAI/)
 
-The port is not a copy: the screen is 240 × 320 and the input is a fingertip, so layouts and cell sizes differ on purpose. Rules match, pixels do not.
+The port is not a copy: the screen is 240 × 320 and the input is a fingertip, so layouts and cell sizes differ on purpose. Rules match, pixels do not. Bubbles is the clearest case — the browser field is 11 × 13 and the device's is 11 × 11, because the cannon needs the bottom of a 320-pixel screen, and the browser's mouse-point-and-click becomes drag-to-aim-and-lift-to-shoot.
 
 ## Two targets, and the order to use them
 
@@ -49,11 +50,13 @@ Three places, in step:
 
 ## Settings kept in flash
 
-`hw::saveInt`/`hw::loadInt` over NVS; keys are at most 15 characters. In use: `lang`, `sound`, `flip`, `inv`, `marks`, `pal`, `cc1`…`cc7` (the player's own marble colours, one packed RGB each), `calok` and `cal0`…`cal5` (the touch calibration, each ×65536), `msize`, `mbest0`, `mbest1`, `lbest`. Reuse a key and you silently inherit someone else's value.
+`hw::saveInt`/`hw::loadInt` over NVS; keys are at most 15 characters. In use: `lang`, `sound`, `flip`, `inv`, `marks`, `pal`, `cc1`…`cc7` (the player's own ball colours, one packed RGB each), `calok` and `cal0`…`cal5` (the touch calibration, each ×65536), `msize`, `mbest0`, `mbest1`, `lbest`, `bbest`. Reuse a key and you silently inherit someone else's value.
 
 ## Colours on the real panel
 
-The panel washes light colours out and shifts them in ways the simulator does not reproduce — the sim renders RGB565 faithfully, so **a screenshot is never evidence about how something looks on the board**. Two blind palette guesses were both rejected on hardware. Hence the on-device picker: three preset palettes plus a fully editable one (Settings → Marble colours), and Marks — a dot, ring, bar, cross, triangle, square or slash inside each marble — so readability does not depend on hue at all. Do not retune palette constants from screenshots; change the picker, or ask what the board shows.
+The panel washes light colours out and shifts them in ways the simulator does not reproduce — the sim renders RGB565 faithfully, so **a screenshot is never evidence about how something looks on the board**. Two blind palette guesses were both rejected on hardware. Hence the on-device picker: three preset palettes plus a fully editable one (Settings → Ball colours), and Marks — a dot, ring, bar, cross, triangle, square or slash inside each ball — so readability does not depend on hue at all. Do not retune palette constants from screenshots; change the picker, or ask what the board shows.
+
+That one set colours both games. Bubbles draws its bubbles with `lines::drawSample` and colours 1…6 of the same palette, rather than carrying a second set that would have to be settled on hardware all over again.
 
 ## Style
 

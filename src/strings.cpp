@@ -7,6 +7,7 @@ static const char* const TEXT[S_COUNT][2] = {
   /* S_PICK */           {"Выберите игру", "Pick a game"},
   /* S_MINES */          {"Сапёр", "Minesweeper"},
   /* S_LINES */          {"Пять в линию", "Five in a Line"},
+  /* S_BUBBLES */        {"Пузыри", "Bubbles"},
   /* S_SETTINGS */       {"Настройки", "Settings"},
   /* S_FOOT */           {"Игры написал Claude · идея posoxAI", "Games by Claude · idea by posoxAI"},
   /* S_MENU */           {"Меню", "Menu"},
@@ -37,6 +38,18 @@ static const char* const TEXT[S_COUNT][2] = {
   /* S_L_OVER_BEST */    {"Игра окончена. Рекорд: %d!", "Game over. New best: %d!"},
   /* S_L_CONFIRM */      {"Ещё раз: счёт сбросится.", "Again: the score will reset."},
 
+  /* S_B_ROW_IN */       {"До ряда", "Row in"},
+  // the browser says "aim and shoot" because a mouse needs no teaching; a fingertip does
+  /* S_B_PROMPT */       {"Ведите пальцем и отпустите.", "Drag to aim, lift to shoot."},
+  /* S_B_POP */          {"Лопнуло %d: +%d.", "Popped %d: +%d."},
+  // the points are left out of this one: both numbers are needed and the счёт above shows the gain anyway
+  /* S_B_POP_DROP */     {"Лопнуло %d, упало %d.", "Popped %d, dropped %d."},
+  /* S_B_ROW */          {"Сверху опустился новый ряд.", "A new row came down from the top."},
+  /* S_B_WON */          {"Поле очищено! Счёт %d.", "Field cleared! Score %d."},
+  /* S_B_WON_BEST */     {"Поле очищено! Рекорд: %d!", "Field cleared! New best: %d!"},
+  /* S_B_LOST */         {"Дошли до черты. Счёт %d.", "Reached the line. Score %d."},
+  /* S_B_LOST_BEST */    {"Дошли до черты. Рекорд: %d!", "Reached the line. New best: %d!"},
+
   /* S_SET_LANG */       {"Язык", "Language"},
   /* S_SET_SOUND */      {"Звук", "Sound"},
   /* S_SET_SCREEN */     {"Экран", "Screen"},
@@ -52,7 +65,8 @@ static const char* const TEXT[S_COUNT][2] = {
   /* S_SET_RESET_SURE */ {"Точно сбросить?", "Really reset?"},
   /* S_SET_RESET_DONE */ {"Рекорды сброшены", "Best results reset"},
 
-  /* S_PAL_TITLE */      {"Цвета шариков", "Marble colours"},
+  // the same set colours the marbles of Five in a Line and the bubbles, hence the plainer name
+  /* S_PAL_TITLE */      {"Цвета шариков", "Ball colours"},
   /* S_PAL_HINT */       {"Выберите ряд. Четвёртый — свой.", "Pick a row. The fourth is yours."},
   /* S_PAL_OWN */        {"Свой набор", "Your own set"},
   /* S_PAL_OWN_HINT */   {"Шарик, затем цвет для него", "A marble, then a colour for it"},

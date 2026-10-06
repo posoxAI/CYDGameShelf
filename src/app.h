@@ -6,13 +6,15 @@
 
 // Every text on the device, in Russian and in English.
 enum StrId {
-  S_TITLE, S_PICK, S_MINES, S_LINES, S_SETTINGS, S_FOOT,
+  S_TITLE, S_PICK, S_MINES, S_LINES, S_BUBBLES, S_SETTINGS, S_FOOT,
   S_MENU, S_BEST, S_NO_BEST,
   // minesweeper
   S_M_NEW, S_M_DIG, S_M_FLAG, S_M_READY, S_M_PLAY, S_M_PLAY_FLAG, S_M_WON, S_M_WON_BEST, S_M_LOST, S_M_CONFIRM,
   // five in a line
   S_L_SCORE, S_L_NEXT, S_L_NEW, S_L_PROMPT, S_L_PICKED, S_L_PICK_FIRST, S_L_BLOCKED, S_L_LINE, S_L_LUCKY,
   S_L_OVER, S_L_OVER_BEST, S_L_CONFIRM,
+  // bubbles
+  S_B_ROW_IN, S_B_PROMPT, S_B_POP, S_B_POP_DROP, S_B_ROW, S_B_WON, S_B_WON_BEST, S_B_LOST, S_B_LOST_BEST,
   // settings
   S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS, S_SET_MARKS, S_ON, S_OFF, S_FLIP, S_NORMAL, S_INVERTED,
   S_SET_CAL, S_SET_RESET, S_SET_RESET_SURE, S_SET_RESET_DONE,
@@ -24,7 +26,7 @@ const char* T(StrId id);
 
 namespace app {
 
-enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_SETTINGS, SCR_PALETTE, SCR_OWN };
+enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_BUBBLES, SCR_SETTINGS, SCR_PALETTE, SCR_OWN };
 
 extern int lang;             // 0 Russian, 1 English
 extern bool soundOn, flip, invert;
@@ -36,6 +38,7 @@ struct Touch {
   bool down, pressed, released, longPress;
   bool wasLong;              // the press that has just ended had already fired longPress
   int x, y;                  // where, in screen pixels
+  int liveX, liveY;          // where the finger is now: unlike x and y these follow it while it is down
   uint32_t downAt;
 };
 extern Touch touch;
@@ -79,4 +82,11 @@ void loadCustom();                   // reads the player's own set out of flash
 void customGet(int c, int& r, int& g, int& b);
 void customSet(int c, int r, int g, int b);               // keeps it in flash straight away
 void customFromPreset(int pal);
+}
+
+namespace bubbles {
+void enter();
+void update();
+int best();
+void resetBest();
 }

@@ -22,7 +22,8 @@ static void queueCalibration(uint32_t first) {
   for (int k = 0; k < 4; k++) sim::tapAt(k ? 500 : first, 420, CAL_X[k], CAL_Y[k]);
 }
 // power on with empty flash: calibration, then the language question
-static void powerOff() { mines::simPowerOff(); lines::simPowerOff(); }   // what the games keep in memory is gone
+// what the games keep in memory is gone
+static void powerOff() { mines::simPowerOff(); lines::simPowerOff(); bubbles::simPowerOff(); }
 static void firstBoot(uint32_t seed, int panel, int language, bool pictures) {
   powerOff();
   sim::reset(seed, false);
@@ -187,6 +188,111 @@ static void testLines() {
   printf("  %d games, %d moves, %d lines cleared, %d blocked moves tried\n", games, moves, cleared, blockedTried);
 }
 
+/* ---------- bubbles rules ---------- */
+
+// The honeycomb is walked here from scratch, out of nothing but the row lengths the game reports, so the
+// checks do not lean on the game's own idea of which cells touch which.
+static int bCols, bMaxRows;
+static const uint8_t* bGrid;
+static void bubLoad() { bGrid = bubbles::simGrid(); bCols = bubbles::simCols(); bMaxRows = bubbles::simMaxRows(); }
+static int bAt(int r, int c) { return bGrid[r * bCols + c]; }
+static bool bShifted(int r) { return bubbles::simRowLen(r) == bCols - 1; }
+static int bNb(int r, int c, int* nr, int* nc) {
+  int s = bShifted(r) ? 1 : 0, n = 0;
+  const int dr[6] = {0, 0, -1, -1, 1, 1}, dc[6] = {-1, 1, s - 1, s, s - 1, s};
+  for (int k = 0; k < 6; k++) {
+    int rr = r + dr[k], cc = c + dc[k];
+    if (rr >= 0 && rr < bMaxRows && cc >= 0 && cc < bubbles::simRowLen(rr)) { nr[n] = rr; nc[n] = cc; n++; }
+  }
+  return n;
+}
+static int bTotal() {
+  int n = 0;
+  for (int r = 0; r < bMaxRows; r++) for (int c = 0; c < bubbles::simRowLen(r); c++) n += bAt(r, c) != 0;
+  return n;
+}
+static int bLowest() {
+  for (int r = bMaxRows - 1; r >= 0; r--) for (int c = 0; c < bubbles::simRowLen(r); c++) if (bAt(r, c)) return r;
+  return -1;
+}
+// bubbles that cannot be reached from the top row through their neighbours
+static int bFloating() {
+  std::vector<uint8_t> seen(bMaxRows * bCols, 0);
+  std::vector<int> q;
+  for (int c = 0; c < bubbles::simRowLen(0); c++) if (bAt(0, c)) { seen[c] = 1; q.push_back(c); }
+  for (size_t k = 0; k < q.size(); k++) {
+    int nr[6], nc[6], n = bNb(q[k] / bCols, q[k] % bCols, nr, nc);
+    for (int j = 0; j < n; j++) {
+      int i = nr[j] * bCols + nc[j];
+      if (!seen[i] && bAt(nr[j], nc[j])) { seen[i] = 1; q.push_back(i); }
+    }
+  }
+  int loose = 0;
+  for (int r = 0; r < bMaxRows; r++) for (int c = 0; c < bubbles::simRowLen(r); c++) if (bAt(r, c) && !seen[r * bCols + c]) loose++;
+  return loose;
+}
+static bool bPresent(int color) {
+  for (int r = 0; r < bMaxRows; r++) for (int c = 0; c < bubbles::simRowLen(r); c++) if (bAt(r, c) == color) return true;
+  return false;
+}
+static void testBubbles() {
+  printf("bubbles rules\n");
+  bubbles::simAnimate(false);
+  int badStart = 0, floating = 0, spare = 0, lostShot = 0, badScore = 0, badMiss = 0, badRow = 0, badColor = 0,
+      badEnd = 0, games = 0, shots = 0, pops = 0, rowsAdded = 0, wins = 0, losses = 0, bounced = 0;
+  const int FIELD_ROWS = bubbles::simFieldRows(), LY = bubbles::simCannonY();
+  for (int g = 0; g < 40; g++) {
+    bubbles::simReset(); bubLoad(); games++;
+    if (bTotal() != 5 * bCols - 2 || bubbles::simScore() || bFloating()) badStart++;
+    for (int step = 0; step < 400 && !bubbles::simOver(); step++) {
+      int before = bTotal(), score0 = bubbles::simScore(), miss0 = bubbles::simMisses(), cur = bubbles::simCur();
+      if (!bPresent(cur)) badColor++;
+      // every fourth shot is aimed almost flat at a wall, so the bounce is used as well
+      bool flat = step % 4 == 3;
+      int tx = flat ? (int)(hw::rnd() % 2 ? 12 : 228) : 12 + (int)(hw::rnd() % 216);
+      int ty = flat ? LY - 6 - (int)(hw::rnd() % 10) : 40 + (int)(hw::rnd() % (uint32_t)(LY - 50));
+      if (flat) bounced++;
+      bubbles::simAim(tx, ty);
+      bubbles::simShoot();
+      shots++;
+      int after = bTotal(), gain = bubbles::simScore() - score0, gone = before + 1 - after;
+      if (after == before) lostShot++;                        // the shot must stick somewhere
+      if (bFloating()) floating++;
+      for (int r = 0; r < bMaxRows; r++) if (bShifted(r) && bAt(r, bCols - 1)) spare++;
+      if (gain) {
+        pops++;
+        // gone bubbles popped for 10 or fell for 20, so the gain sits between the two and lands on a ten
+        if (gone < 3 || gain < 10 * gone || gain > 20 * gone || gain % 10) badScore++;
+        if (bubbles::simMisses() != miss0) badMiss++;   // a pop does not forgive the shots that missed
+      } else {
+        if (gone != 0 && gone != -(bubbles::simRowLen(0))) badScore++;
+        // a shot that pops nothing counts; the fifth brings a row down and the count starts again
+        if (miss0 + 1 < 5) { if (bubbles::simMisses() != miss0 + 1) badMiss++; }
+        else {
+          rowsAdded++;
+          if (bubbles::simMisses() != 0) badMiss++;
+          if (after != before + 1 + bubbles::simRowLen(0)) badRow++;
+          for (int c = 0; c < bubbles::simRowLen(0); c++) if (!bAt(0, c)) badRow++;
+        }
+      }
+    }
+    if (!bubbles::simOver()) { badEnd++; continue; }
+    if (bubbles::simWon()) { wins++; if (bTotal()) badEnd++; }
+    else { losses++; if (bLowest() < FIELD_ROWS) badEnd++; }
+  }
+  bubbles::simAnimate(true);
+  check(!badStart, "a new game starts with five full rows, no score and nothing hanging loose");
+  check(!lostShot && bounced > 100, "every shot sticks to the field, flat ones off the walls included");
+  check(!floating, "a bubble left without support always falls");
+  check(!spare, "a shifted row never holds a bubble in the column it does not have");
+  check(!badScore && pops > 20, "popping scores ten a bubble and falling twice that");
+  check(!badMiss, "a shot that pops nothing counts towards the next row");
+  check(!badRow && rowsAdded > 10, "the fifth such shot brings a full new row down from the top");
+  check(!badColor, "the cannon is only loaded with a colour that is still on the field");
+  check(!badEnd && wins + losses == games, "the game ends with an empty field or a bubble below the line");
+  printf("  %d games, %d shots, %d pops, %d rows added, %d cleared, %d lost\n", games, shots, pops, rowsAdded, wins, losses);
+}
+
 /* ---------- texts ---------- */
 
 static void testTexts() {
@@ -194,13 +300,15 @@ static void testTexts() {
   int tooWide = 0;
   static const StrId STATUS[] = {S_M_READY, S_M_PLAY, S_M_PLAY_FLAG, S_M_WON, S_M_WON_BEST, S_M_LOST, S_M_CONFIRM, S_L_PROMPT, S_L_PICKED,
                                  S_L_PICK_FIRST, S_L_BLOCKED, S_L_LINE, S_L_LUCKY, S_L_OVER, S_L_OVER_BEST, S_L_CONFIRM, S_FOOT, S_PICK,
-                                 S_PAL_HINT, S_PAL_OWN_HINT};
+                                 S_PAL_HINT, S_PAL_OWN_HINT,
+                                 S_B_PROMPT, S_B_POP, S_B_POP_DROP, S_B_ROW, S_B_WON, S_B_WON_BEST, S_B_LOST, S_B_LOST_BEST};
   struct Fit { StrId id; int width; const Font* font; };
   static const Fit BUTTONS[] = {{S_MENU, 64, &FONT_M}, {S_M_NEW, 62, &FONT_M}, {S_M_DIG, 64, &FONT_M}, {S_M_FLAG, 64, &FONT_M}, {S_L_NEW, 143, &FONT_M},
-                                {S_MINES, 154, &FONT_M}, {S_LINES, 154, &FONT_M}, {S_SETTINGS, 206, &FONT_M}, {S_TITLE, 236, &FONT_L}, {S_SET_LANG, 86, &FONT_M},
+                                {S_MINES, 154, &FONT_M}, {S_LINES, 154, &FONT_M}, {S_BUBBLES, 154, &FONT_M}, {S_SETTINGS, 206, &FONT_M},
+                                {S_TITLE, 236, &FONT_L}, {S_SET_LANG, 86, &FONT_M},
                                 {S_SET_SOUND, 86, &FONT_M}, {S_SET_SCREEN, 86, &FONT_M}, {S_SET_COLORS, 86, &FONT_M}, {S_SET_MARKS, 86, &FONT_M}, {S_FLIP, 118, &FONT_M},
                                 {S_NORMAL, 118, &FONT_M}, {S_INVERTED, 118, &FONT_M}, {S_SET_CAL, 206, &FONT_M}, {S_SET_RESET, 206, &FONT_M},
-                                {S_SET_RESET_SURE, 206, &FONT_M}, {S_SET_RESET_DONE, 206, &FONT_M}, {S_L_SCORE, 76, &FONT_S}, {S_L_NEXT, 72, &FONT_S}, {S_BEST, 76, &FONT_S},
+                                {S_SET_RESET_SURE, 206, &FONT_M}, {S_SET_RESET_DONE, 206, &FONT_M}, {S_L_SCORE, 56, &FONT_S}, {S_L_NEXT, 52, &FONT_S}, {S_BEST, 56, &FONT_S}, {S_B_ROW_IN, 58, &FONT_S},
                                 {S_PAL_TITLE, 206, &FONT_M}, {S_PAL_TITLE, 236, &FONT_L}, {S_PAL_OWN, 236, &FONT_L},
                                 {S_PAL_RESET, 94, &FONT_M}, {S_PAL_DONE, 94, &FONT_M}};
   for (app::lang = 0; app::lang < 2; app::lang++) {
@@ -232,17 +340,19 @@ static void testScreens() {
     check(app::simScreen() == app::SCR_MENU, "boot ends in the menu");
     check(sim::logText().find("ready") != std::string::npos, "calibration succeeded on the first try");
     if (panel == 0) { sim::shot("03-menu-ru"); printf("%s", sim::logText().c_str()); }
-    tap(120, 107); check(app::simScreen() == app::SCR_MINES, "the Minesweeper button opens Minesweeper");
+    tap(120, 100); check(app::simScreen() == app::SCR_MINES, "the Minesweeper button opens Minesweeper");
     tap(40, 305); check(app::simScreen() == app::SCR_MENU, "Menu leads back");
-    tap(120, 173); check(app::simScreen() == app::SCR_LINES, "the Five in a Line button opens it");
+    tap(120, 156); check(app::simScreen() == app::SCR_LINES, "the Five in a Line button opens it");
     tap(40, 305);
-    tap(120, 236); check(app::simScreen() == app::SCR_SETTINGS, "the Settings button opens settings");
-    tap(120, 298); check(app::simScreen() == app::SCR_MENU, "settings lead back");
+    tap(120, 212); check(app::simScreen() == app::SCR_BUBBLES, "the Bubbles button opens Bubbles");
+    tap(40, 305);
+    tap(120, 266); check(app::simScreen() == app::SCR_SETTINGS, "the Settings button opens settings");
+    tap(120, 303); check(app::simScreen() == app::SCR_MENU, "settings lead back");
   }
 
   // Minesweeper by touch: a tap opens, a long press flags, the mode switch swaps them
   firstBoot(7, 0, 0, false);
-  tap(120, 107);
+  tap(120, 100);
   sim::shot("04-mines-start");
   tap(mines::simCellX(40), mines::simCellY(40));
   check(mines::simStatus() == 1 && mines::simOpen()[40], "a tap opens a cell and starts the game");
@@ -262,7 +372,7 @@ static void testScreens() {
   tap(199, 305);                                               // back to Dig
   // open a few more safe cells for a fuller picture
   for (int i = 0, done = 0; i < 81 && done < 6; i++) if (!mines::simOpen()[i] && !mines::simMine()[i]) { mines::simPrimary(i); done++; }
-  tap(40, 305); tap(120, 107);                                 // out to the menu and back: the game must still be there
+  tap(40, 305); tap(120, 100);                                 // out to the menu and back: the game must still be there
   check(mines::simStatus() == 1 && mines::simOpen()[40], "the game survives a trip to the menu");
   run(2100);
   sim::shot("05-mines-play");
@@ -281,7 +391,7 @@ static void testScreens() {
   tap(mines::simCellX(120), mines::simCellY(120));
   for (int i = 0, done = 0; i < 256 && done < 25; i++) if (!mines::simOpen()[i] && !mines::simMine()[i]) { mines::simPrimary(i); done++; }
   for (int i = 0, done = 0; i < 256 && done < 9; i++) if (mines::simMine()[i]) { mines::simSecondary(i); done++; }
-  tap(40, 305); tap(120, 107);
+  tap(40, 305); tap(120, 100);
   sim::shot("08-mines-16");
   // win on 9 x 9 and check the best time is kept
   tap(120, 305); run(200); tap(120, 305);
@@ -289,14 +399,14 @@ static void testScreens() {
   tap(mines::simCellX(40), mines::simCellY(40));
   run(1500);
   for (int i = 0; i < 81; i++) if (!mines::simOpen()[i] && !mines::simMine()[i]) mines::simPrimary(i);
-  tap(40, 305); tap(120, 107);
+  tap(40, 305); tap(120, 100);
   check(mines::simStatus() == 2 && mines::bestTenths(0) > 0, "a win is kept as the best time");
   sim::shot("09-mines-won");
   tap(40, 305);
   sim::shot("10-menu-with-best");
 
   // Five in a Line by touch
-  tap(120, 173);
+  tap(120, 156);
   sim::shot("11-lines-start");
   uint8_t* b = lines::simBoard();
   int src = -1, dst = -1;
@@ -312,7 +422,7 @@ static void testScreens() {
   // build a line by hand: four in a row plus the mover
   memset(b, 0, 81);
   b[9 * 4 + 0] = b[9 * 4 + 1] = b[9 * 4 + 2] = b[9 * 4 + 3] = 3; b[9 * 6 + 4] = 3; b[0] = 1; b[8] = 2; b[80] = 5; b[72] = 6; b[44] = 7; b[13] = 4;
-  tap(40, 305); tap(120, 173);
+  tap(40, 305); tap(120, 156);
   sim::shot("13-lines-before-line");
   tap(lines::simCellX(9 * 6 + 4), lines::simCellY(9 * 6 + 4));
   tap(lines::simCellX(9 * 4 + 4), lines::simCellY(9 * 4 + 4));
@@ -327,51 +437,109 @@ static void testScreens() {
   for (int i = 0; i < 81; i++) b[i] = (uint8_t)(1 + (i * 3 + i / 9 * 2) % 7);
   b[0] = 0; b[1] = 0; b[9] = 0;
   run(3800);
-  tap(40, 305); tap(120, 173);
+  tap(40, 305); tap(120, 156);
   tap(lines::simCellX(10), lines::simCellY(10)); tap(lines::simCellX(9), lines::simCellY(9));
   check(lines::simOver(), "the game ends when the board fills up");
   sim::shot("16-lines-over");
   tap(40, 305);
 
+  // Bubbles by touch: the finger aims and lifting it takes the shot
+  tap(120, 212);
+  bubLoad();
+  uint8_t* bg = bubbles::simGrid();
+  const int BCOLS = bubbles::simCols(), BCELLS = bubbles::simMaxRows() * BCOLS;
+  check(bTotal() == 53 && !bubbles::simScore(), "a new game starts with five full rows and no score");
+  sim::shot("17-bubbles-start");
+  int c0 = bubbles::simCur(), n0 = bubbles::simNext();
+  tap(208, 25);
+  check(bubbles::simCur() == n0 && bubbles::simNext() == c0, "a tap on Next swaps the loaded bubble with the waiting one");
+  // the picture is taken while the finger is still down, so the dotted guide is in it
+  sim::shotAt(300, "18-bubbles-aim");
+  sim::tapAt(40, 400, 60, 120);
+  finishQueue();
+  check(bTotal() != 53, "lifting the finger takes the shot and the bubble sticks");
+
+  // Bubbles is the one screen that draws in pieces: a flying bubble, bubbles that pop and bubbles that fall
+  // are all rubbed out by repainting the little box they were in. An erase box one pixel short of the thing
+  // it erases leaves a trail across the field, and the only way to see that from here is to compare the field
+  // against what a full repaint would have drawn.
+  std::vector<uint16_t> drawn;
+  for (int y = 36; y < 270; y++) for (int x = 10; x < 230; x++) drawn.push_back(sim::pixel(x, y));
+  tap(40, 305); tap(120, 212);                 // a trip to the menu and back repaints the screen from scratch
+  size_t at = 0;
+  int differ = 0;
+  for (int y = 36; y < 270; y++) for (int x = 10; x < 230; x++) if (drawn[at++] != sim::pixel(x, y)) differ++;
+  check(!differ, "after a shot the field matches a full repaint, so nothing is left drawn on it");
+
+  // three of a colour by hand: the shot goes straight up between two of its own and all three pop
+  bubbles::simReset();
+  memset(bg, 0, BCELLS);
+  bg[4] = bg[5] = 3; bg[0] = 6;
+  bubbles::simLoaded(3, 6);
+  tap(40, 305); tap(120, 212);
+  sim::shot("19-bubbles-before-pop");
+  tap(120, 100);
+  check(bubbles::simScore() == 30 && bTotal() == 1, "three of a colour pop for ten points each");
+
+  // and the same shot on a field of nothing else clears it
+  memset(bg, 0, BCELLS);
+  bg[4] = bg[5] = 3;
+  bubbles::simLoaded(3, 3);
+  tap(40, 305); tap(120, 212);
+  tap(120, 100);
+  check(bubbles::simOver() && bubbles::simWon(), "an empty field wins the game");
+
+  // a full field has nowhere left but below the red line
+  bubbles::simReset();
+  for (int r = 0; r < bubbles::simMaxRows(); r++) for (int c = 0; c < BCOLS; c++)
+    bg[r * BCOLS + c] = (uint8_t)(r < bubbles::simFieldRows() && c < bubbles::simRowLen(r) ? 1 : 0);
+  bubbles::simLoaded(2, 2);
+  tap(40, 305); tap(120, 212);
+  tap(120, 100);
+  check(bubbles::simOver() && !bubbles::simWon() && bLowest() >= bubbles::simFieldRows(), "a bubble below the line loses the game");
+  sim::shot("20-bubbles-over");
+  tap(40, 305);
+
   // settings: language, flip (touch must still land), the marble colours, reset
-  tap(120, 236);
-  sim::shot("17-settings-ru");
+  tap(120, 266);
+  sim::shot("21-settings-ru");
   tap(198, 60);
   check(app::lang == 1, "EN switches the language");
-  sim::shot("18-settings-en");
+  sim::shot("22-settings-en");
   tap(164, 128);
   check(app::flip, "Turn over flips the screen");
   tap(120, 303);
   check(app::simScreen() == app::SCR_MENU, "after the flip the touch still lands where the picture is");
-  sim::shot("19-menu-en");
-  tap(120, 107); sim::shot("20-mines-en"); tap(40, 305);
-  tap(120, 173); sim::shot("21-lines-en"); tap(40, 305);
-  tap(120, 236); tap(164, 128);
+  sim::shot("23-menu-en");
+  tap(120, 100); sim::shot("24-mines-en"); tap(40, 305);
+  tap(120, 156); sim::shot("25-lines-en"); tap(40, 305);
+  tap(120, 212); sim::shot("26-bubbles-en"); tap(40, 305);
+  tap(120, 266); tap(164, 128);
   check(!app::flip, "and flips back");
 
   // the sets of marble colours and the marks are picked on their own screen
   tap(120, 201);
   check(app::simScreen() == app::SCR_PALETTE, "Marble colours opens the picking screen");
   check(app::palette == 0 && app::marks, "it starts on the first set with the marks on");
-  sim::shot("22-palette");
+  sim::shot("27-palette");
   tap(120, 118);
   check(app::palette == 1, "a tap picks the second set");
   tap(164, 242);
   check(!app::marks, "Marks turns the signs on the marbles off");
-  sim::shot("23-palette-second-no-marks");
+  sim::shot("28-palette-second-no-marks");
   tap(120, 290);
   check(app::simScreen() == app::SCR_SETTINGS, "and the screen leads back to settings");
-  tap(120, 303); tap(120, 173); sim::shot("24-lines-set-2"); tap(40, 305);
-  tap(120, 236); tap(120, 201); tap(120, 158);
+  tap(120, 303); tap(120, 156); sim::shot("29-lines-set-2"); tap(40, 305);
+  tap(120, 266); tap(120, 201); tap(120, 158);
   check(app::palette == 2, "the third set can be picked too");
-  tap(120, 290); tap(120, 303); tap(120, 173); sim::shot("25-lines-set-3"); tap(40, 305);
+  tap(120, 290); tap(120, 303); tap(120, 156); sim::shot("30-lines-set-3"); tap(40, 305);
 
   // the fourth row is the player's own set, and picking it opens the screen that changes it
   int r0, g0, b0, r1, g1, b1;
   lines::customGet(2, r0, g0, b0);
-  tap(120, 236); tap(120, 201); tap(120, 198);
+  tap(120, 266); tap(120, 201); tap(120, 198);
   check(app::palette == 3 && app::simScreen() == app::SCR_OWN, "the fourth row is the player's own and opens for changing");
-  sim::shot("26-own-colours");
+  sim::shot("31-own-colours");
   tap(60, 71);                                                 // the second marble
   tap(22, 110);                                                // the first square of the grid: a vivid red
   lines::customGet(2, r1, g1, b1);
@@ -380,14 +548,14 @@ static void testScreens() {
   tap(190, 230);                                               // and a square of the bottom row
   lines::customGet(2, r1, g1, b1);
   check(r1 == g1 && g1 == b1 && r1 > 200, "the bottom row of the grid holds colours with no hue at all");
-  sim::shot("27-own-changed");
+  sim::shot("32-own-changed");
   tap(176, 288);
   check(app::simScreen() == app::SCR_PALETTE, "Done leads back to the sets");
-  tap(120, 290); tap(120, 303); tap(120, 173);
-  sim::shot("28-lines-own");                                   // the board is drawn with the changed set
+  tap(120, 290); tap(120, 303); tap(120, 156);
+  sim::shot("33-lines-own");                                   // the board is drawn with the changed set
   tap(40, 305);
   // in again, put the set back and return to the first one
-  tap(120, 236); tap(120, 201); tap(120, 198);
+  tap(120, 266); tap(120, 201); tap(120, 198);
   tap(64, 288);
   lines::customGet(2, r1, g1, b1);
   check(r1 == r0 && g1 == g0 && b1 == b0, "Reset puts the first set back");
@@ -396,8 +564,8 @@ static void testScreens() {
   check(app::palette == 0 && app::marks, "the first set and the marks come back");
   tap(120, 290);
 
-  tap(120, 269); sim::shot("29-settings-reset-armed"); tap(120, 269);
-  check(mines::bestTenths(0) == 0 && lines::best() == 0, "Reset best results clears them after a second press");
+  tap(120, 269); sim::shot("34-settings-reset-armed"); tap(120, 269);
+  check(mines::bestTenths(0) == 0 && lines::best() == 0 && bubbles::best() == 0, "Reset best results clears them after a second press");
   tap(120, 303);
 
   // power cycle: nothing is asked again, the language is kept
@@ -407,7 +575,7 @@ static void testScreens() {
   sim::reset(9, true);
   app::setup(); run(100);
   check(app::simScreen() == app::SCR_MENU && app::lang == 1, "after a restart the calibration and the language are remembered");
-  tap(120, 107);
+  tap(120, 100);
   check(app::simScreen() == app::SCR_MINES, "and the stored calibration still works");
 
   // a finger held on the screen through the splash forces a new calibration
@@ -425,6 +593,7 @@ int main(int argc, char** argv) {
   app::lang = 0;
   testMines();
   testLines();
+  testBubbles();
   testTexts();
   testScreens();
   printf("%d checks passed, %d failed\n", passed, failed);

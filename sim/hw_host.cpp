@@ -37,6 +37,7 @@ uint32_t queuedUntil() { return lastEnd; }
 void setPanel(int kind) { panel = kind; }
 int tones() { return toneCount; }
 std::string logText() { return logged; }
+uint16_t pixel(int x, int y) { return (x >= 0 && y >= 0 && x < hw::W && y < hw::H) ? fb[y * hw::W + x] : 0; }
 void shot(const char* name) {
   std::string path = outDir + "/" + name + ".ppm";
   FILE* f = fopen(path.c_str(), "wb");

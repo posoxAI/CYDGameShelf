@@ -8,7 +8,7 @@ int lang = 0;
 bool soundOn = true, flip = false, invert = false;
 bool marks = true;
 int palette = 0;
-Touch touch = {false, false, false, false, false, 0, 0, 0};
+Touch touch = {false, false, false, false, false, 0, 0, 0, 0, 0};
 
 static Screen current = SCR_MENU;
 
@@ -59,11 +59,15 @@ void pollTouch() {
       if (okCount >= 2) {
         touch.down = true; touch.pressed = true; touch.downAt = now; touch.wasLong = false;
         sumX = sx; sumY = sy; sumN = 1; touch.x = sx; touch.y = sy; longFired = false;
+        touch.liveX = sx; touch.liveY = sy;
       }
     } else {
       // the first tenth of a second is averaged into the position; later readings are ignored
       if (now - touch.downAt < 110) { sumX += sx; sumY += sy; sumN++; touch.x = (int)(sumX / sumN); touch.y = (int)(sumY / sumN); }
       if (!longFired && now - touch.downAt >= 450) { longFired = true; touch.longPress = true; }
+      // a screen that is dragged rather than tapped needs the finger followed; a panel this noisy needs the
+      // readings smoothed on the way, or the aim shakes
+      touch.liveX = (touch.liveX * 2 + sx) / 3; touch.liveY = (touch.liveY * 2 + sy) / 3;
     }
   } else {
     okCount = 0;
@@ -190,12 +194,13 @@ static void chooseLanguage() {
 
 /* ---------- menu ---------- */
 
-static const ui::Rect MENU_MINES = {12, 78, 216, 58}, MENU_LINES = {12, 144, 216, 58}, MENU_SET = {12, 214, 216, 44};
+static const ui::Rect MENU_MINES = {12, 74, 216, 52}, MENU_LINES = {12, 130, 216, 52},
+                      MENU_BUBBLES = {12, 186, 216, 52}, MENU_SET = {12, 246, 216, 40};
 
 static void gameButton(const ui::Rect& r, const char* name, const char* sub) {
   hw::fillRoundRect(r.x, r.y, r.w, r.h, 6, C_PANEL);
-  ui::label(r.x + 56, r.y + 9, r.w - 62, 20, name, FONT_M, C_INK, C_PANEL, ui::LEFT);
-  ui::label(r.x + 56, r.y + 31, r.w - 62, 16, sub, FONT_S, C_MUTED, C_PANEL, ui::LEFT);
+  ui::label(r.x + 56, r.y + 7, r.w - 62, 20, name, FONT_M, C_INK, C_PANEL, ui::LEFT);
+  ui::label(r.x + 56, r.y + 28, r.w - 62, 16, sub, FONT_S, C_MUTED, C_PANEL, ui::LEFT);
 }
 static void drawMenu() {
   char sub[48], t[16];
@@ -208,7 +213,7 @@ static void drawMenu() {
   else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
   gameButton(MENU_MINES, T(S_MINES), sub);
   // a little closed tile with a flag
-  int ix = MENU_MINES.x + 12, iy = MENU_MINES.y + 12;
+  int ix = MENU_MINES.x + 12, iy = MENU_MINES.y + 9;
   hw::fillRect(ix, iy, 34, 34, RGB(58, 74, 92));
   hw::fillRect(ix, iy, 34, 2, RGB(88, 106, 127)); hw::fillRect(ix, iy, 2, 34, RGB(88, 106, 127));
   hw::fillRect(ix, iy + 32, 34, 2, RGB(36, 48, 61)); hw::fillRect(ix + 32, iy, 2, 34, RGB(36, 48, 61));
@@ -219,7 +224,14 @@ static void drawMenu() {
   if (lines::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), lines::best());
   else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
   gameButton(MENU_LINES, T(S_LINES), sub);
-  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_LINES.x + 14 + k * 14, MENU_LINES.y + 29, 6, lines::ballColor(k + 1));
+  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_LINES.x + 14 + k * 14, MENU_LINES.y + 26, 6, lines::ballColor(k + 1));
+
+  if (bubbles::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), bubbles::best());
+  else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
+  gameButton(MENU_BUBBLES, T(S_BUBBLES), sub);
+  // three bubbles hanging over a fourth, the way they sit on the field
+  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_BUBBLES.x + 14 + k * 12, MENU_BUBBLES.y + 20, 5, lines::ballColor(k + 4));
+  for (int k = 0; k < 2; k++) hw::fillCircle(MENU_BUBBLES.x + 20 + k * 12, MENU_BUBBLES.y + 30, 5, lines::ballColor(k + 1));
 
   ui::button(MENU_SET.x, MENU_SET.y, MENU_SET.w, MENU_SET.h, T(S_SETTINGS), FONT_M, C_INK, C_PANEL);
   ui::label(0, 296, hw::W, 16, T(S_FOOT), FONT_S, C_MUTED, C_BG);
@@ -228,6 +240,7 @@ static void updateMenu() {
   if (!touch.pressed) return;
   if (MENU_MINES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_MINES); }
   else if (MENU_LINES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_LINES); }
+  else if (MENU_BUBBLES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_BUBBLES); }
   else if (MENU_SET.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_SETTINGS); }
 }
 
@@ -272,7 +285,7 @@ static void updateSettings() {
   bool redraw = true;
   if (SET_RESET.has(x, y)) {
     if (!resetArmedAt) { resetArmedAt = hw::ms(); resetDone = false; }
-    else { resetArmedAt = 0; resetDone = true; mines::resetBest(); lines::resetBest(); snd::play(440, 120); }
+    else { resetArmedAt = 0; resetDone = true; mines::resetBest(); lines::resetBest(); bubbles::resetBest(); snd::play(440, 120); }
     drawReset();
     return;
   }
@@ -433,7 +446,8 @@ void go(Screen s) {
   else if (s == SCR_PALETTE) drawPalette();
   else if (s == SCR_OWN) drawOwn();
   else if (s == SCR_MINES) mines::enter();
-  else lines::enter();
+  else if (s == SCR_LINES) lines::enter();
+  else bubbles::enter();
 }
 
 void setup() {
@@ -478,7 +492,8 @@ void loop() {
   else if (current == SCR_PALETTE) updatePalette();
   else if (current == SCR_OWN) updateOwn();
   else if (current == SCR_MINES) mines::update();
-  else lines::update();
+  else if (current == SCR_LINES) lines::update();
+  else bubbles::update();
   hw::sleepMs(3);
 }
 
