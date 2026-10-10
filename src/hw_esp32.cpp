@@ -62,6 +62,11 @@ void fillTriangle(int x0, int y0, int x1, int y1, int x2, int y2, uint16_t color
 void drawLine(int x0, int y0, int x1, int y1, uint16_t color) { tft.drawLine(x0, y0, x1, y1, color); }
 void blit(int x, int y, int w, int h, const uint16_t* pixels) { tft.pushImage(x, y, w, h, (uint16_t*)pixels); }
 
+// TFT_eSPI calls this a viewport. The false keeps the origin at the corner of the screen, so coordinates
+// stay what they were and the viewport only cuts.
+void setClip(int x, int y, int w, int h) { tft.setViewport(x, y, w, h, false); }
+void clearClip() { tft.resetViewport(); }
+
 // The XPT2046 answers each command one transfer later, 12 bits wide, shifted up by three.
 // The command order follows the widely used XPT2046_Touchscreen library.
 static int16_t middleOfThree(int16_t a, int16_t b, int16_t c) {

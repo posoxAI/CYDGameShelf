@@ -195,63 +195,111 @@ static void chooseLanguage() {
 
 /* ---------- menu ---------- */
 
-// Four games and the settings fill the screen between the title and the footer, so a row is 46 pixels and
-// holds a 34-pixel picture with the name and the best result beside it.
-static const ui::Rect MENU_MINES = {12, 62, 216, 46}, MENU_LINES = {12, 112, 216, 46},
-                      MENU_BUBBLES = {12, 162, 216, 46}, MENU_BRICKS = {12, 212, 216, 46},
-                      MENU_SET = {12, 264, 216, 30};
+// The shelf is a list that scrolls. Four 46-pixel rows show at a time in the band between the subtitle and
+// Settings; a finger dragged over them moves the list, and a press that hardly moved is the choice of a game.
+// Settings stays put below the band, because it is not a game and should never need looking for.
+static const int GAMES = 5, LIST_Y = 62, LIST_H = 196, ROW_H = 46, ROW_STEP = 50;
+static const int LIST_CONTENT = GAMES * ROW_STEP - (ROW_STEP - ROW_H);
+static const ui::Rect MENU_SET = {12, 264, 216, 30};
+static const uint16_t BAR_TRACK = RGB(28, 37, 47), BAR_THUMB = RGB(104, 124, 144);
+
+struct Shelf { StrId name; Screen screen; };
+static const Shelf SHELF[GAMES] = {
+  {S_MINES, SCR_MINES}, {S_LINES, SCR_LINES}, {S_BUBBLES, SCR_BUBBLES}, {S_BRICKS, SCR_BRICKS}, {S_G2048, SCR_2048}
+};
+
+static int menuScroll = 0, menuDragAt = 0, menuDragMoved = 0;
+static bool menuDrag = false;
+static int menuMaxScroll() { return LIST_CONTENT > LIST_H ? LIST_CONTENT - LIST_H : 0; }
+static ui::Rect menuRow(int k) { return ui::Rect{12, LIST_Y + k * ROW_STEP - menuScroll, 216, ROW_H}; }
 
 static void gameButton(const ui::Rect& r, const char* name, const char* sub) {
   hw::fillRoundRect(r.x, r.y, r.w, r.h, 6, C_PANEL);
   ui::label(r.x + 56, r.y + 4, r.w - 62, 19, name, FONT_M, C_INK, C_PANEL, ui::LEFT);
   ui::label(r.x + 56, r.y + 24, r.w - 62, 16, sub, FONT_S, C_MUTED, C_PANEL, ui::LEFT);
 }
+// The best result of game k, or the line that says there is none yet.
+static void menuSub(int k, char* out, int size) {
+  char t[16];
+  if (k == 0) {
+    int b = mines::bestTenths(0);
+    if (b) { mines::formatTime(b, t, sizeof t); snprintf(out, size, "%s 9×9: %s", T(S_BEST), t); return; }
+  } else {
+    int b = k == 1 ? lines::best() : k == 2 ? bubbles::best() : k == 3 ? bricks::best() : g2048::best();
+    if (b) { snprintf(out, size, "%s: %d", T(S_BEST), b); return; }
+  }
+  snprintf(out, size, "%s", T(S_NO_BEST));
+}
+// A 34-pixel picture of game k with its corner at x, y.
+static void menuIcon(int k, int x, int y) {
+  if (k == 0) {                      // a little closed tile with a flag
+    hw::fillRect(x, y, 34, 34, RGB(58, 74, 92));
+    hw::fillRect(x, y, 34, 2, RGB(88, 106, 127)); hw::fillRect(x, y, 2, 34, RGB(88, 106, 127));
+    hw::fillRect(x, y + 32, 34, 2, RGB(36, 48, 61)); hw::fillRect(x + 32, y, 2, 34, RGB(36, 48, 61));
+    hw::fillRect(x + 18, y + 7, 2, 19, C_INK);
+    hw::fillTriangle(x + 18, y + 7, x + 7, y + 12, x + 18, y + 17, RGB(255, 90, 77));
+    hw::fillRect(x + 11, y + 26, 14, 2, C_INK);
+  } else if (k == 1) {               // three marbles in a row
+    for (int c = 0; c < 3; c++) hw::fillCircle(x + 2 + c * 14, y + 17, 6, lines::ballColor(c + 1));
+  } else if (k == 2) {               // three bubbles hanging over two, the way they sit on the field
+    for (int c = 0; c < 3; c++) hw::fillCircle(x + 2 + c * 12, y + 11, 5, lines::ballColor(c + 4));
+    for (int c = 0; c < 2; c++) hw::fillCircle(x + 8 + c * 12, y + 21, 5, lines::ballColor(c + 1));
+  } else if (k == 3) bricks::drawIcon(x, y);
+  else g2048::drawIcon(x, y);
+}
+// The rows, cut to the band so the one half out of it stops at the edge.
+static void drawMenuList() {
+  char sub[48];
+  hw::setClip(0, LIST_Y, hw::W, LIST_H);
+  hw::fillRect(0, LIST_Y, hw::W, LIST_H, C_BG);
+  for (int k = 0; k < GAMES; k++) {
+    ui::Rect r = menuRow(k);
+    if (r.y + r.h <= LIST_Y || r.y >= LIST_Y + LIST_H) continue;
+    menuSub(k, sub, sizeof sub);
+    gameButton(r, T(SHELF[k].name), sub);
+    menuIcon(k, r.x + 12, r.y + 6);
+  }
+  hw::clearClip();
+  // the bar on the right is the only thing that says there is more of the shelf below
+  int max = menuMaxScroll();
+  if (!max) return;
+  int th = LIST_H * LIST_H / LIST_CONTENT;
+  hw::fillRect(230, LIST_Y, 4, LIST_H, BAR_TRACK);
+  hw::fillRect(230, LIST_Y + (LIST_H - th) * menuScroll / max, 4, th, BAR_THUMB);
+}
 static void drawMenu() {
-  char sub[48], t[16];
   hw::fillRect(0, 0, hw::W, hw::H, C_BG);
   ui::label(0, 6, hw::W, 34, T(S_TITLE), FONT_L, C_INK, C_BG);
   ui::label(0, 42, hw::W, 16, T(S_PICK), FONT_S, C_MUTED, C_BG);
-
-  int b = mines::bestTenths(0);
-  if (b) { mines::formatTime(b, t, sizeof t); snprintf(sub, sizeof sub, "%s 9×9: %s", T(S_BEST), t); }
-  else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
-  gameButton(MENU_MINES, T(S_MINES), sub);
-  // a little closed tile with a flag
-  int ix = MENU_MINES.x + 12, iy = MENU_MINES.y + 6;
-  hw::fillRect(ix, iy, 34, 34, RGB(58, 74, 92));
-  hw::fillRect(ix, iy, 34, 2, RGB(88, 106, 127)); hw::fillRect(ix, iy, 2, 34, RGB(88, 106, 127));
-  hw::fillRect(ix, iy + 32, 34, 2, RGB(36, 48, 61)); hw::fillRect(ix + 32, iy, 2, 34, RGB(36, 48, 61));
-  hw::fillRect(ix + 18, iy + 7, 2, 19, C_INK);
-  hw::fillTriangle(ix + 18, iy + 7, ix + 7, iy + 12, ix + 18, iy + 17, RGB(255, 90, 77));
-  hw::fillRect(ix + 11, iy + 26, 14, 2, C_INK);
-
-  if (lines::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), lines::best());
-  else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
-  gameButton(MENU_LINES, T(S_LINES), sub);
-  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_LINES.x + 14 + k * 14, MENU_LINES.y + 23, 6, lines::ballColor(k + 1));
-
-  if (bubbles::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), bubbles::best());
-  else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
-  gameButton(MENU_BUBBLES, T(S_BUBBLES), sub);
-  // three bubbles hanging over a fourth, the way they sit on the field
-  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_BUBBLES.x + 14 + k * 12, MENU_BUBBLES.y + 17, 5, lines::ballColor(k + 4));
-  for (int k = 0; k < 2; k++) hw::fillCircle(MENU_BUBBLES.x + 20 + k * 12, MENU_BUBBLES.y + 27, 5, lines::ballColor(k + 1));
-
-  if (bricks::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), bricks::best());
-  else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
-  gameButton(MENU_BRICKS, T(S_BRICKS), sub);
-  bricks::drawIcon(MENU_BRICKS.x + 12, MENU_BRICKS.y + 6);
-
+  drawMenuList();
   ui::button(MENU_SET.x, MENU_SET.y, MENU_SET.w, MENU_SET.h, T(S_SETTINGS), FONT_M, C_INK, C_PANEL);
   ui::label(0, 298, hw::W, 16, T(S_FOOT), FONT_S, C_MUTED, C_BG);
 }
 static void updateMenu() {
-  if (!touch.pressed) return;
-  if (MENU_MINES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_MINES); }
-  else if (MENU_LINES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_LINES); }
-  else if (MENU_BUBBLES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_BUBBLES); }
-  else if (MENU_BRICKS.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_BRICKS); }
-  else if (MENU_SET.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_SETTINGS); }
+  if (touch.pressed) {
+    if (touch.y >= LIST_Y && touch.y < LIST_Y + LIST_H) {
+      menuDrag = true; menuDragAt = touch.liveY; menuDragMoved = 0;
+    } else if (MENU_SET.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_SETTINGS); }
+    return;
+  }
+  if (!menuDrag) return;
+  if (touch.down) {
+    int dy = touch.liveY - menuDragAt, was = menuScroll, max = menuMaxScroll();
+    menuDragAt = touch.liveY;
+    menuDragMoved += dy < 0 ? -dy : dy;
+    menuScroll -= dy;
+    if (menuScroll < 0) menuScroll = 0;
+    if (menuScroll > max) menuScroll = max;
+    if (menuScroll != was) drawMenuList();
+    return;
+  }
+  menuDrag = false;
+  if (menuDragMoved >= 8) return;            // the finger was scrolling the shelf, not choosing off it
+  for (int k = 0; k < GAMES; k++) if (menuRow(k).has(touch.x, touch.y)) {
+    snd::play(880, 25);
+    go(SHELF[k].screen);
+    return;
+  }
 }
 
 /* ---------- settings ---------- */
@@ -315,7 +363,7 @@ static void updateSettings() {
   bool redraw = true;
   if (SET_RESET.has(x, y)) {
     if (!resetArmedAt) { resetArmedAt = hw::ms(); resetDone = false; }
-    else { resetArmedAt = 0; resetDone = true; mines::resetBest(); lines::resetBest(); bubbles::resetBest(); bricks::resetBest(); snd::play(440, 120); }
+    else { resetArmedAt = 0; resetDone = true; mines::resetBest(); lines::resetBest(); bubbles::resetBest(); bricks::resetBest(); g2048::resetBest(); snd::play(440, 120); }
     drawReset();
     return;
   }
@@ -481,7 +529,8 @@ void go(Screen s) {
   else if (s == SCR_MINES) mines::enter();
   else if (s == SCR_LINES) lines::enter();
   else if (s == SCR_BUBBLES) bubbles::enter();
-  else bricks::enter();
+  else if (s == SCR_BRICKS) bricks::enter();
+  else g2048::enter();
 }
 
 void setup() {
@@ -530,12 +579,14 @@ void loop() {
   else if (current == SCR_MINES) mines::update();
   else if (current == SCR_LINES) lines::update();
   else if (current == SCR_BUBBLES) bubbles::update();
-  else bricks::update();
+  else if (current == SCR_BRICKS) bricks::update();
+  else g2048::update();
   hw::sleepMs(3);
 }
 
 #ifdef CYD_SIM
 int simScreen() { return (int)current; }
+int simScroll() { return menuScroll; }
 #endif
 
 }  // namespace app

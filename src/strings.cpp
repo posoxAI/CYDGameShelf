@@ -9,6 +9,7 @@ static const char* const TEXT[S_COUNT][2] = {
   /* S_LINES */          {"Пять в линию", "Five in a Line"},
   /* S_BUBBLES */        {"Пузыри", "Bubbles"},
   /* S_BRICKS */         {"Кирпичи", "Bricks"},
+  /* S_G2048 */          {"2048", "2048"},
   /* S_SETTINGS */       {"Настройки", "Settings"},
   /* S_FOOT */           {"Игры написал Claude · идея posoxAI", "Games by Claude · idea by posoxAI"},
   /* S_MENU */           {"Меню", "Menu"},
@@ -65,6 +66,17 @@ static const char* const TEXT[S_COUNT][2] = {
   /* S_K_LIFE */         {"Лишний мяч.", "An extra ball."},
   /* S_K_OVER */         {"Игра окончена. Счёт %d.", "Game over. Score %d."},
   /* S_K_OVER_BEST */    {"Игра окончена. Рекорд: %d!", "Game over. New best: %d!"},
+
+  /* S_G_UNDO */         {"Отмена", "Undo"},
+  // the browser teaches the arrow keys first; here there is only the finger
+  /* S_G_START */        {"Проведите пальцем по полю.", "Swipe across the board."},
+  /* S_G_MOVED */        {"Плюс %d.", "Plus %d."},
+  /* S_G_STUCK */        {"В эту сторону ничего не идёт.", "Nothing moves that way."},
+  /* S_G_UNDONE */       {"Ход отменён.", "Move undone."},
+  /* S_G_NOUNDO */       {"Отменять нечего.", "Nothing to undo."},
+  /* S_G_WIN */          {"2048 собрано! Счёт %d.", "2048 made! Score %d."},
+  /* S_G_OVER */         {"Ходов нет. Счёт %d.", "No moves left. Score %d."},
+  /* S_G_OVER_BEST */    {"Ходов нет. Рекорд: %d!", "No moves left. New best: %d!"},
 
   /* S_SET_LANG */       {"Язык", "Language"},
   /* S_SET_SOUND */      {"Звук", "Sound"},

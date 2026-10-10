@@ -6,7 +6,7 @@
 
 // Every text on the device, in Russian and in English.
 enum StrId {
-  S_TITLE, S_PICK, S_MINES, S_LINES, S_BUBBLES, S_BRICKS, S_SETTINGS, S_FOOT,
+  S_TITLE, S_PICK, S_MINES, S_LINES, S_BUBBLES, S_BRICKS, S_G2048, S_SETTINGS, S_FOOT,
   S_MENU, S_BEST, S_NO_BEST,
   // minesweeper
   S_M_NEW, S_M_DIG, S_M_FLAG, S_M_READY, S_M_PLAY, S_M_PLAY_FLAG, S_M_WON, S_M_WON_BEST, S_M_LOST, S_M_CONFIRM,
@@ -18,6 +18,8 @@ enum StrId {
   // bricks
   S_K_LEVEL, S_K_BALLS, S_K_READY, S_K_PLAY, S_K_PAUSE, S_K_LOST, S_K_CLEAR,
   S_K_WIDE, S_K_SLOW, S_K_MULTI, S_K_LIFE, S_K_OVER, S_K_OVER_BEST,
+  // 2048
+  S_G_UNDO, S_G_START, S_G_MOVED, S_G_STUCK, S_G_UNDONE, S_G_NOUNDO, S_G_WIN, S_G_OVER, S_G_OVER_BEST,
   // settings
   S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS, S_SET_MARKS, S_ON, S_OFF, S_FLIP, S_NORMAL, S_INVERTED,
   S_SET_CAL, S_SET_RESET, S_SET_RESET_SURE, S_SET_RESET_DONE,
@@ -29,7 +31,7 @@ const char* T(StrId id);
 
 namespace app {
 
-enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_BUBBLES, SCR_BRICKS, SCR_SETTINGS, SCR_PALETTE, SCR_OWN };
+enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_BUBBLES, SCR_BRICKS, SCR_2048, SCR_SETTINGS, SCR_PALETTE, SCR_OWN };
 
 extern int lang;             // 0 Russian, 1 English
 extern int soundLevel;       // 0 silent, then 1 quiet, 2 and 3 loudest
@@ -102,4 +104,12 @@ void update();
 int best();
 void resetBest();
 void drawIcon(int x, int y);         // the little wall with a ball, for the menu
+}
+
+namespace g2048 {
+void enter();
+void update();
+int best();
+void resetBest();
+void drawIcon(int x, int y);         // four little tiles, for the menu
 }

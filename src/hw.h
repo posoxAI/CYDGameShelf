@@ -18,6 +18,11 @@ void fillTriangle(int x0, int y0, int x1, int y1, int x2, int y2, uint16_t color
 void drawLine(int x0, int y0, int x1, int y1, uint16_t color);
 void blit(int x, int y, int w, int h, const uint16_t* pixels);   // w*h colours, row by row
 
+// Cuts everything drawn after it to this box, so a list can be scrolled and the row half out of it
+// stops at the edge instead of running over the screen above. clearClip() gives the whole screen back.
+void setClip(int x, int y, int w, int h);
+void clearClip();
+
 // Raw touch panel readings, about 0..4095 each. Returns false while nothing presses the screen.
 bool touchRaw(int& rx, int& ry, int& rz);
 bool bootButton();                 // the BOOT button on the board is held down

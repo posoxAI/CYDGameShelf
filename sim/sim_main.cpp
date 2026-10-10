@@ -15,6 +15,14 @@ static void check(bool ok, const char* what) {
 static void run(uint32_t ms) { for (uint32_t end = hw::ms() + ms; hw::ms() < end;) app::loop(); }
 static void finishQueue() { while (hw::ms() < sim::queuedUntil() + 120) app::loop(); }
 static void tap(int x, int y) { sim::tapAt(40, 90, x, y); finishQueue(); }
+// One press that moves before it is let go: the pretend panel reports the second place without a gap, which
+// is what a drag and a swipe look like to the touch layer.
+static void drag(int x0, int y0, int x1, int y1) {
+  sim::tapAt(40, 220, x0, y0);
+  sim::tapAt(0, 220, x1, y1);
+  finishQueue();
+}
+static void scrollShelf(int from, int to) { drag(120, from, 120, to); }
 static void hold(int x, int y, uint32_t ms) { sim::tapAt(40, ms, x, y); finishQueue(); }
 
 static const int CAL_X[4] = {30, 210, 60, 150}, CAL_Y[4] = {44, 150, 284, 226};
@@ -23,7 +31,9 @@ static void queueCalibration(uint32_t first) {
 }
 // power on with empty flash: calibration, then the language question
 // what the games keep in memory is gone
-static void powerOff() { mines::simPowerOff(); lines::simPowerOff(); bubbles::simPowerOff(); bricks::simPowerOff(); }
+static void powerOff() {
+  mines::simPowerOff(); lines::simPowerOff(); bubbles::simPowerOff(); bricks::simPowerOff(); g2048::simPowerOff();
+}
 static void firstBoot(uint32_t seed, int panel, int language, bool pictures) {
   powerOff();
   sim::reset(seed, false);
@@ -433,6 +443,130 @@ static void testBricks() {
   printf("  %d games, %d levels cleared, %d balls launched and missed\n", games, levels, launches);
 }
 
+/* ---------- 2048 rules ---------- */
+
+// The board walked here from scratch, so the checks do not lean on the game's own idea of what can move.
+static bool gFull(const int* c) { for (int i = 0; i < 16; i++) if (!c[i]) return false; return true; }
+static bool gStuck(const int* c) {
+  if (!gFull(c)) return false;
+  for (int r = 0; r < 4; r++) for (int k = 0; k < 4; k++) {
+    if (k < 3 && c[r * 4 + k] == c[r * 4 + k + 1]) return false;
+    if (k < 3 && c[k * 4 + r] == c[(k + 1) * 4 + r]) return false;
+  }
+  return true;
+}
+static int gSum(const int* c) { int s = 0; for (int i = 0; i < 16; i++) s += c[i]; return s; }
+static int gTiles(const int* c) { int n = 0; for (int i = 0; i < 16; i++) n += c[i] != 0; return n; }
+static bool gPowers(const int* c) {
+  for (int i = 0; i < 16; i++) { int v = c[i]; if (v && (v < 2 || (v & (v - 1)))) return false; }
+  return true;
+}
+// Lays out one row and reports what sliding it left comes to, as four numbers and the points.
+static bool gRowLeft(int a, int b, int c, int d, int w, int x, int y, int z, int points) {
+  int* g = g2048::simCells();
+  int out[16], gained = 0;
+  for (int i = 0; i < 16; i++) g[i] = 0;
+  g[0] = a; g[1] = b; g[2] = c; g[3] = d;
+  bool moved = g2048::simSlide(3, out, gained);
+  bool same = out[0] == w && out[1] == x && out[2] == y && out[3] == z && gained == points;
+  bool should = !(a == w && b == x && c == y && d == z && !points);
+  return same && moved == should;
+}
+
+static void testG2048() {
+  printf("2048 rules\n");
+  g2048::simAnimate(false);
+  int* g = g2048::simCells();
+
+  g2048::simReset();
+  check(gTiles(g) == 2 && gPowers(g) && gSum(g) >= 4 && gSum(g) <= 8 && !g2048::simScore() &&
+        !g2048::simOver() && !g2048::simWon() && !g2048::simCanUndo(),
+        "a new game starts with two tiles, no score and nothing to undo");
+
+  // the slide itself, laid out by hand, including the rule that a tile merges only once in a move
+  int rows = 0;
+  rows += gRowLeft(2, 2, 2, 2, 4, 4, 0, 0, 8);          // not 8 0 0 0
+  rows += gRowLeft(2, 2, 4, 0, 4, 4, 0, 0, 4);
+  rows += gRowLeft(4, 2, 2, 4, 4, 4, 4, 0, 4);
+  rows += gRowLeft(0, 0, 0, 2, 2, 0, 0, 0, 0);          // a slide with no merge still counts as a move
+  rows += gRowLeft(2, 4, 8, 16, 2, 4, 8, 16, 0);        // and a packed line does not move at all
+  rows += gRowLeft(2, 0, 2, 4, 4, 4, 0, 0, 4);
+  rows += gRowLeft(4, 4, 4, 4, 8, 8, 0, 0, 16);
+  check(rows == 7, "a line slides, merges once a tile, and scores what the merges come to");
+
+  // the four directions do the same thing to a board turned round
+  for (int i = 0; i < 16; i++) g[i] = 0;
+  g[12] = 2; g[13] = 2;
+  int out[16], gained = 0;
+  bool down = g2048::simSlide(2, out, gained);
+  check(!down && !gained, "a line already against the wall it is pushed to does not move");
+  g2048::simSlide(1, out, gained);
+  check(out[15] == 4 && gained == 4 && !out[14], "and merges to the far side when pushed along it");
+
+  // a few hundred games played at random, checking what every move is allowed to do
+  int badSum = 0, badGain = 0, badPower = 0, badEnd = 0, badStuck = 0, games = 0, moves = 0, over = 0, wins = 0;
+  for (int gm = 0; gm < 120; gm++) {
+    g2048::simReset(); games++;
+    for (int k = 0; k < 4000 && !g2048::simOver(); k++) {
+      int before[16];
+      memcpy(before, g, sizeof before);
+      int s0 = g2048::simScore(), dir = (int)(hw::rnd() % 4u);
+      bool slides = g2048::simSlides(dir);
+      g2048::simMove(dir);
+      int gain = g2048::simScore() - s0;
+      if (!slides) {                                    // nothing may change
+        if (memcmp(before, g, sizeof before) || gain) badGain++;
+        continue;
+      }
+      moves++;
+      if (!gPowers(g)) badPower++;
+      // merging keeps the total, so the board grows by exactly the one new tile
+      int grew = gSum(g) - gSum(before);
+      if (grew != 2 && grew != 4) badSum++;
+      // every merge takes two tiles into one worth at least four, so the points follow the count
+      int fused = gTiles(before) + 1 - gTiles(g);
+      if (fused < 0 || (fused == 0) != (gain == 0) || gain < 4 * fused || gain % 4) badGain++;
+      if (!g2048::simOver() && gStuck(g)) badEnd++;     // a dead board must be called dead
+      if (g2048::simOver() && !gStuck(g)) badStuck++;
+    }
+    if (g2048::simOver()) over++;
+    if (g2048::simWon()) wins++;
+  }
+  check(!badPower, "every tile is a power of two");
+  check(!badSum, "a move adds exactly one tile, worth 2 or 4, and merging keeps the total");
+  check(!badGain && moves > 2000, "a move that changes nothing scores nothing, and the points match the merges");
+  check(!badEnd && !badStuck && over == games, "the game ends exactly when the board is full with no equal neighbours");
+
+  // 2048 wins and the game goes on
+  g2048::simReset();
+  for (int i = 0; i < 16; i++) g[i] = 0;
+  g[0] = 1024; g[1] = 1024;
+  g2048::simMove(3);
+  check(g2048::simWon() && !g2048::simOver() && g2048::simScore() == 2048,
+        "two 1024s make 2048, which wins and leaves the game playable");
+  g2048::simMove(2);
+  check(!g2048::simOver(), "and a move after the win is still taken");
+
+  // one move back, and only one
+  g2048::simReset();
+  for (int i = 0; i < 16; i++) g[i] = 0;
+  g[0] = 2; g[1] = 2; g[8] = 8;
+  int keep[16];
+  memcpy(keep, g, sizeof keep);
+  g2048::simMove(3);
+  check(g2048::simScore() == 4 && g2048::simCanUndo(), "a merge scores and can be taken back");
+  g2048::simUndo();
+  check(!memcmp(keep, g, sizeof keep) && !g2048::simScore() && !g2048::simCanUndo(),
+        "undo puts the board and the score back exactly");
+  int wasBest = g2048::best();
+  g2048::simUndo();
+  check(!memcmp(keep, g, sizeof keep) && g2048::best() == wasBest,
+        "a second undo changes nothing, and the best result is never taken back");
+
+  g2048::simAnimate(true);
+  printf("  %d games, %d moves, %d ended, %d reached 2048\n", games, moves, over, wins);
+}
+
 /* ---------- texts ---------- */
 
 static void testTexts() {
@@ -443,10 +577,11 @@ static void testTexts() {
                                  S_PAL_HINT, S_PAL_OWN_HINT,
                                  S_B_PROMPT, S_B_POP, S_B_POP_DROP, S_B_ROW, S_B_WON, S_B_WON_BEST, S_B_LOST, S_B_LOST_BEST,
                                  S_K_READY, S_K_PLAY, S_K_PAUSE, S_K_LOST, S_K_CLEAR, S_K_WIDE, S_K_SLOW, S_K_MULTI,
-                                 S_K_LIFE, S_K_OVER, S_K_OVER_BEST};
+                                 S_K_LIFE, S_K_OVER, S_K_OVER_BEST,
+                                 S_G_START, S_G_MOVED, S_G_STUCK, S_G_UNDONE, S_G_NOUNDO, S_G_WIN, S_G_OVER, S_G_OVER_BEST};
   struct Fit { StrId id; int width; const Font* font; };
-  static const Fit BUTTONS[] = {{S_MENU, 64, &FONT_M}, {S_M_NEW, 62, &FONT_M}, {S_M_DIG, 64, &FONT_M}, {S_M_FLAG, 64, &FONT_M}, {S_L_NEW, 143, &FONT_M},
-                                {S_MINES, 154, &FONT_M}, {S_LINES, 154, &FONT_M}, {S_BUBBLES, 154, &FONT_M}, {S_BRICKS, 154, &FONT_M}, {S_SETTINGS, 206, &FONT_M},
+  static const Fit BUTTONS[] = {{S_MENU, 64, &FONT_M}, {S_M_NEW, 62, &FONT_M}, {S_M_DIG, 64, &FONT_M}, {S_M_FLAG, 64, &FONT_M}, {S_L_NEW, 143, &FONT_M}, {S_G_UNDO, 70, &FONT_M},
+                                {S_MINES, 154, &FONT_M}, {S_LINES, 154, &FONT_M}, {S_BUBBLES, 154, &FONT_M}, {S_BRICKS, 154, &FONT_M}, {S_G2048, 154, &FONT_M}, {S_SETTINGS, 206, &FONT_M},
                                 {S_TITLE, 236, &FONT_L}, {S_SET_LANG, 86, &FONT_M},
                                 {S_SET_SOUND, 86, &FONT_M}, {S_SET_SCREEN, 86, &FONT_M}, {S_SET_COLORS, 86, &FONT_M}, {S_SET_MARKS, 86, &FONT_M}, {S_FLIP, 118, &FONT_M},
                                 {S_NORMAL, 118, &FONT_M}, {S_INVERTED, 118, &FONT_M}, {S_SET_CAL, 206, &FONT_M}, {S_SET_RESET, 206, &FONT_M},
@@ -714,23 +849,72 @@ static void testScreens() {
   sim::shot("24-bricks-steel");
   tap(120, 305); tap(120, 305);                // New game, asked and confirmed
   tap(40, 305);
-  sim::shot("25-menu-four-games");
+  sim::shot("25-menu-shelf");
+
+  // The shelf is longer than the band it shows in, so it scrolls. Four rows fit; the fifth game is below.
+  check(app::simScroll() == 0, "the shelf starts at the top");
+  uint16_t above = sim::pixel(120, 50), barTop = sim::pixel(232, 70), barBottom = sim::pixel(232, 250);
+  check(barTop != barBottom, "a bar down the right says there is more shelf than fits");
+  scrollShelf(200, 170);
+  check(app::simScroll() >= 25 && app::simScroll() <= 35, "a finger drawn up the shelf scrolls it as far as it went");
+  check(app::simScreen() == app::SCR_MENU, "and scrolling does not open the game it started on");
+  check(sim::pixel(120, 50) == above, "a row scrolled half out of the band is cut at the edge of it");
+  sim::shot("26-menu-scrolled");
+  scrollShelf(230, 120);
+  check(app::simScroll() == 50, "and the shelf stops once the last game is in view");
+  check(sim::pixel(232, 70) == barBottom && sim::pixel(232, 250) == barTop, "with the bar now at the other end");
+
+  // 2048 by touch: a swipe slides the tiles, Undo takes the move back
+  tap(120, 235);
+  check(app::simScreen() == app::SCR_2048, "the fifth game opens once it is in view");
+  sim::shot("27-2048-start");
+  int* g = g2048::simCells();
+  for (int i = 0; i < 16; i++) g[i] = 0;
+  g[0] = 2; g[4] = 2; g[3] = 8;
+  tap(38, 303); tap(120, 235);                 // out to the menu and back, so the board is drawn from scratch
+  drag(120, 200, 120, 100);
+  check(g[0] == 4 && g2048::simScore() == 4, "a swipe up slides the tiles and merges the pair it brings together");
+  check(g2048::simCanUndo(), "and leaves a move to take back");
+  int tiles = 0;
+  for (int i = 0; i < 16; i++) tiles += g[i] != 0;
+  check(tiles == 3, "a new tile arrives with the move");
+  sim::shot("28-2048-play");
+  tap(115, 303);
+  check(g[0] == 2 && g[4] == 2 && g[3] == 8 && !g2048::simScore() && !g2048::simCanUndo(),
+        "Undo puts the board and the score back and has nothing left to undo");
+  drag(120, 120, 122, 126);                    // too short to be a swipe
+  check(g[0] == 2 && !g2048::simScore(), "a press that hardly moved is not a swipe");
+
+  // played out at random, to see the screen with no moves left on it
+  g2048::simAnimate(false);
+  g2048::simReset();
+  for (int k = 0; k < 4000 && !g2048::simOver(); k++) g2048::simMove((int)(hw::rnd() % 4u));
+  g2048::simAnimate(true);
+  g2048::enter();
+  check(g2048::simOver(), "a game played out to the end has no moves left");
+  sim::shot("29-2048-over");
+  tap(197, 303);
+  check(!g2048::simOver() && !g2048::simScore(), "New puts a fresh board up");
+  tap(38, 303);
+  scrollShelf(120, 260);
+  check(app::simScroll() == 0, "dragging the shelf back down stops at the top");
 
   // settings: language, flip (touch must still land), the marble colours, reset
   tap(120, 279);
-  sim::shot("26-settings-ru");
+  sim::shot("30-settings-ru");
   tap(198, 60);
   check(app::lang == 1, "EN switches the language");
-  sim::shot("27-settings-en");
+  sim::shot("31-settings-en");
   tap(164, 128);
   check(app::flip, "Turn over flips the screen");
   tap(120, 303);
   check(app::simScreen() == app::SCR_MENU, "after the flip the touch still lands where the picture is");
-  sim::shot("28-menu-en");
-  tap(120, 85); sim::shot("29-mines-en"); tap(40, 305);
-  tap(120, 135); sim::shot("30-lines-en"); tap(40, 305);
-  tap(120, 185); sim::shot("31-bubbles-en"); tap(40, 305);
-  tap(120, 235); sim::shot("32-bricks-en"); tap(40, 305);
+  sim::shot("32-menu-en");
+  tap(120, 85); sim::shot("33-mines-en"); tap(40, 305);
+  tap(120, 135); sim::shot("34-lines-en"); tap(40, 305);
+  tap(120, 185); sim::shot("35-bubbles-en"); tap(40, 305);
+  tap(120, 235); sim::shot("36-bricks-en"); tap(40, 305);
+  scrollShelf(230, 120); tap(120, 235); sim::shot("37-2048-en"); tap(38, 303); scrollShelf(120, 260);
   tap(120, 279); tap(164, 128);
   check(!app::flip, "and flips back");
 
@@ -750,25 +934,25 @@ static void testScreens() {
   tap(120, 201);
   check(app::simScreen() == app::SCR_PALETTE, "Marble colours opens the picking screen");
   check(app::palette == 0 && app::marks, "it starts on the first set with the marks on");
-  sim::shot("33-palette");
+  sim::shot("38-palette");
   tap(120, 118);
   check(app::palette == 1, "a tap picks the second set");
   tap(164, 242);
   check(!app::marks, "Marks turns the signs on the marbles off");
-  sim::shot("34-palette-second-no-marks");
+  sim::shot("39-palette-second-no-marks");
   tap(120, 290);
   check(app::simScreen() == app::SCR_SETTINGS, "and the screen leads back to settings");
-  tap(120, 303); tap(120, 135); sim::shot("35-lines-set-2"); tap(40, 305);
+  tap(120, 303); tap(120, 135); sim::shot("40-lines-set-2"); tap(40, 305);
   tap(120, 279); tap(120, 201); tap(120, 158);
   check(app::palette == 2, "the third set can be picked too");
-  tap(120, 290); tap(120, 303); tap(120, 135); sim::shot("36-lines-set-3"); tap(40, 305);
+  tap(120, 290); tap(120, 303); tap(120, 135); sim::shot("41-lines-set-3"); tap(40, 305);
 
   // the fourth row is the player's own set, and picking it opens the screen that changes it
   int r0, g0, b0, r1, g1, b1;
   lines::customGet(2, r0, g0, b0);
   tap(120, 279); tap(120, 201); tap(120, 198);
   check(app::palette == 3 && app::simScreen() == app::SCR_OWN, "the fourth row is the player's own and opens for changing");
-  sim::shot("37-own-colours");
+  sim::shot("42-own-colours");
   tap(60, 71);                                                 // the second marble
   tap(22, 110);                                                // the first square of the grid: a vivid red
   lines::customGet(2, r1, g1, b1);
@@ -777,11 +961,11 @@ static void testScreens() {
   tap(190, 230);                                               // and a square of the bottom row
   lines::customGet(2, r1, g1, b1);
   check(r1 == g1 && g1 == b1 && r1 > 200, "the bottom row of the grid holds colours with no hue at all");
-  sim::shot("38-own-changed");
+  sim::shot("43-own-changed");
   tap(176, 288);
   check(app::simScreen() == app::SCR_PALETTE, "Done leads back to the sets");
   tap(120, 290); tap(120, 303); tap(120, 135);
-  sim::shot("39-lines-own");                                   // the board is drawn with the changed set
+  sim::shot("44-lines-own");                                   // the board is drawn with the changed set
   tap(40, 305);
   // in again, put the set back and return to the first one
   tap(120, 279); tap(120, 201); tap(120, 198);
@@ -793,7 +977,7 @@ static void testScreens() {
   check(app::palette == 0 && app::marks, "the first set and the marks come back");
   tap(120, 290);
 
-  tap(120, 269); sim::shot("40-settings-reset-armed"); tap(120, 269);
+  tap(120, 269); sim::shot("45-settings-reset-armed"); tap(120, 269);
   check(mines::bestTenths(0) == 0 && lines::best() == 0 && bubbles::best() == 0, "Reset best results clears them after a second press");
   tap(120, 303);
 
@@ -825,6 +1009,7 @@ int main(int argc, char** argv) {
   testLines();
   testBubbles();
   testBricks();
+  testG2048();
   testTexts();
   testScreens();
   printf("%d checks passed, %d failed\n", passed, failed);

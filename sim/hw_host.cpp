@@ -62,9 +62,13 @@ static void advance(uint32_t t) {
 namespace hw {
 using namespace sim;
 
-static void px(int x, int y, uint16_t c) { if (x >= 0 && y >= 0 && x < W && y < H) fb[y * W + x] = c; }
+static int clipX = 0, clipY = 0, clipW = W, clipH = H;
+static void px(int x, int y, uint16_t c) {
+  if (x < clipX || y < clipY || x >= clipX + clipW || y >= clipY + clipH) return;
+  if (x >= 0 && y >= 0 && x < W && y < H) fb[y * W + x] = c;
+}
 
-void begin() {}
+void begin() { clearClip(); }
 void setFlip(bool flip) { flipped = flip; }
 void setInvert(bool invert) { inverted = invert; }
 void fillRect(int x, int y, int w, int h, uint16_t c) { for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) px(x + i, y + j, c); }
@@ -93,6 +97,8 @@ void fillTriangle(int x0, int y0, int x1, int y1, int x2, int y2, uint16_t c) {
   }
 }
 void blit(int x, int y, int w, int h, const uint16_t* p) { for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) px(x + i, y + j, p[j * w + i]); }
+void setClip(int x, int y, int w, int h) { clipX = x; clipY = y; clipW = w; clipH = h; }
+void clearClip() { clipX = 0; clipY = 0; clipW = W; clipH = H; }
 
 // The pretend panel reports odd raw numbers on purpose: axes swapped, mirrored or skewed, depending on `panel`.
 bool touchRaw(int& rx, int& ry, int& rz) {

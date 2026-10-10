@@ -18,7 +18,7 @@ extern std::string outDir;
 }
 
 // test views exported by the game files when CYD_SIM is defined
-namespace app { int simScreen(); }
+namespace app { int simScreen(); int simScroll(); }
 namespace mines {
 const uint8_t* simMine(); const uint8_t* simAdj(); const uint8_t* simOpen(); const uint8_t* simFlag();
 int simCols(); int simRows(); int simMines(); int simStatus(); int simFlags(); int simCellX(int i); int simCellY(int i);
@@ -40,4 +40,9 @@ void simPaddleTo(int x); void simDrop(int kind, int x, int y); void simPowerOff(
 int simPaddleX(); int simPaddleW(); int simBalls(); int simBallX(int k); int simBallY(int k); bool simStuck(int k);
 int simSpeed(); int simScore(); int simLives(); int simLevel(); int simState(); int simCapsules(); int simBricks(int kind);
 int simLeft(); int simRight(); int simTop(); int simFloor(); int simPaddleY(); int simBallR(); int simFieldY();
+}
+namespace g2048 {
+void simReset(); void simAnimate(bool on); void simMove(int dir); void simUndo(); void simPowerOff();
+int* simCells(); bool simSlides(int dir); bool simSlide(int dir, int* out, int& gained); int simScore(); bool simOver(); bool simWon(); bool simCanUndo();
+int simCellX(int i); int simCellY(int i);
 }
