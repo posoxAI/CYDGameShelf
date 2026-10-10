@@ -23,7 +23,7 @@ static void queueCalibration(uint32_t first) {
 }
 // power on with empty flash: calibration, then the language question
 // what the games keep in memory is gone
-static void powerOff() { mines::simPowerOff(); lines::simPowerOff(); bubbles::simPowerOff(); }
+static void powerOff() { mines::simPowerOff(); lines::simPowerOff(); bubbles::simPowerOff(); bricks::simPowerOff(); }
 static void firstBoot(uint32_t seed, int panel, int language, bool pictures) {
   powerOff();
   sim::reset(seed, false);
@@ -293,6 +293,146 @@ static void testBubbles() {
   printf("  %d games, %d shots, %d pops, %d rows added, %d cleared, %d lost\n", games, shots, pops, rowsAdded, wins, losses);
 }
 
+/* ---------- bricks rules ---------- */
+
+enum { BK_PLAIN, BK_STRONG, BK_STEEL, BK_ANY = -1 };
+enum { BS_READY, BS_PLAY, BS_CLEAR, BS_OVER, BS_PAUSE };
+
+static int kLowest() {           // the ball nearest the floor, the one the paddle has to answer
+  int n = bricks::simBalls(), low = -1;
+  for (int k = 0; k < n; k++) if (low < 0 || bricks::simBallY(k) > bricks::simBallY(low)) low = k;
+  return low;
+}
+// A paddle that never misses. The offset wanders, so the ball leaves at a fresh angle every time instead of
+// running up and down one column for ever; sixteen pixels is well inside the half paddle, so it always catches.
+static void kCatch(int beat) {
+  int low = kLowest();
+  if (low >= 0) bricks::simPaddleTo(bricks::simBallX(low) + ((beat / 37) % 5 - 2) * 8);
+}
+// And one that always misses: it stands on the side the ball is not on.
+static void kMiss() {
+  int low = kLowest();
+  if (low < 0) return;
+  bool right = bricks::simBallX(low) > (bricks::simLeft() + bricks::simRight()) / 2;
+  bricks::simPaddleTo(right ? bricks::simLeft() : bricks::simRight());
+}
+
+static void testBricks() {
+  printf("bricks rules\n");
+  bricks::simAnimate(false);
+  bricks::simNoDrops(true);              // the capsules are checked on their own, below
+  const int LEFT = bricks::simLeft(), RIGHT = bricks::simRight(), TOP = bricks::simTop(),
+            FLOOR = bricks::simFloor(), BR = bricks::simBallR();
+  int badStart = 0, escaped = 0, badScore = 0, badLeft = 0, badNumber = 0, badLives = 0, unfinished = 0,
+      levels = 0, beats = 0, games = 0, speeds[10] = {0};
+  for (int g = 0; g < 2; g++) {
+    bricks::simReset(); games++;
+    if (bricks::simScore() || bricks::simLives() != 3 || bricks::simLevel() != 1 || bricks::simBalls() != 1 ||
+        !bricks::simStuck(0) || bricks::simState() != BS_READY || bricks::simBricks(BK_PLAIN) != 60 ||
+        bricks::simBricks(BK_ANY) != 60) badStart++;
+    for (int pass = 0; pass < 8; pass++) {
+      int number = bricks::simLevel();
+      // what this wall is worth: ten for a plain brick, twenty for a strong one, a hundred times the level
+      int want = bricks::simBricks(BK_PLAIN) * 10 + bricks::simBricks(BK_STRONG) * 20 + 100 * number;
+      int steel = bricks::simBricks(BK_STEEL), score0 = bricks::simScore();
+      // the seventh wall is the first one over again, and the ball on it is faster
+      if (number == 7 && bricks::simBricks(BK_PLAIN) != 60) badNumber++;
+      bricks::simLaunch();
+      if (number < 10) speeds[number] = bricks::simSpeed();
+      bool noted = false;
+      int tick = 0;
+      for (; tick < 40000 && bricks::simLevel() == number; tick++) {
+        kCatch(beats++);
+        bricks::simStep(1);
+        for (int k = 0; k < bricks::simBalls(); k++) {
+          int x = bricks::simBallX(k), y = bricks::simBallY(k);
+          if (x < LEFT + BR - 1 || x > RIGHT - BR + 1 || y < TOP + BR - 1 || y > FLOOR + BR) escaped++;
+        }
+        if (!(tick & 15) && bricks::simBricks(BK_STEEL) != steel) badLeft++;    // steel does not break
+        if (bricks::simState() == BS_CLEAR && !noted) {
+          noted = true;
+          if (bricks::simBricks(BK_ANY) != steel) badLeft++;   // a level is clear with only the steel standing
+          if (bricks::simScore() != score0 + want) badScore++;
+        }
+      }
+      if (!noted || tick >= 40000) { unfinished++; break; }
+      levels++;
+      if (bricks::simLevel() != number + 1) badNumber++;
+      if (bricks::simLives() != 3) badLives++;               // a paddle that never misses never loses a ball
+    }
+  }
+  check(!badStart, "a new game starts with three balls on the first wall, no score and nothing launched");
+  check(!escaped, "the ball stays between the walls and the ceiling");
+  check(!badLeft, "steel never breaks and is not needed to clear a level");
+  check(!badScore, "a plain brick scores ten, a strong one twenty, a cleared level a hundred times its number");
+  check(!badNumber && levels == 16 && speeds[7] > speeds[1],
+        "the levels follow one another and come round again after the sixth, faster");
+  check(!badLives, "a paddle that catches every ball loses none");
+  check(!unfinished, "every level is cleared");
+  {
+    int rising = 0;
+    for (int k = 2; k <= 8; k++) if (speeds[k] > speeds[k - 1]) rising++;
+    check(rising == 7, "every level is a little faster than the one before");
+  }
+
+  // a ball that gets past the paddle is lost, and the third one ends the game
+  bricks::resetBest();
+  bricks::simReset();
+  int launches = 0, badLost = 0, leftOver = 3;
+  for (int guard = 0; guard < 80000 && bricks::simState() != BS_OVER; guard++) {
+    if (bricks::simState() == BS_READY) {
+      if (launches) {                      // a ball went past and the next one is waiting on the paddle
+        if (bricks::simLives() != leftOver - 1) badLost++;
+        leftOver = bricks::simLives();
+      }
+      launches++;
+      bricks::simLaunch();
+    }
+    kMiss();
+    bricks::simStep(1);
+  }
+  check(bricks::simState() == BS_OVER && !bricks::simLives() && launches == 3, "three balls past the paddle end the game");
+  check(!badLost && leftOver == 1, "and each one costs exactly one ball");
+  check(bricks::best() > 0 && bricks::best() == bricks::simScore(), "the score of a finished game is kept as the best");
+  int kept = bricks::simScore();
+  bricks::simReset();
+  check(bricks::simScore() == 0 && bricks::best() == kept, "a new game starts from nothing and leaves the best alone");
+
+  // the four capsules. Each is dropped straight above a paddle standing still, close enough that the ball
+  // cannot be lost before it is caught.
+  int effects = 0;
+  for (int kind = 0; kind < 4; kind++) {
+    bricks::simReset();
+    bricks::simPaddleTo(120);
+    bricks::simStep(1);
+    bricks::simLaunch();
+    int w0 = bricks::simPaddleW(), s0 = bricks::simSpeed(), n0 = bricks::simBalls(), l0 = bricks::simLives();
+    bricks::simDrop(kind, 120, bricks::simPaddleY() - 40);
+    for (int t = 0; t < 40 && bricks::simCapsules(); t++) bricks::simStep(1);
+    if (bricks::simCapsules()) continue;                     // not caught: the check below will say so
+    int w1 = bricks::simPaddleW(), s1 = bricks::simSpeed(), n1 = bricks::simBalls(), l1 = bricks::simLives();
+    if (kind == 0 && w1 > w0) effects++;
+    if (kind == 1 && s1 < s0 * 72 / 100 && s1 > s0 * 64 / 100 && w1 == w0) effects++;
+    if (kind == 2 && n1 == n0 + 2) effects++;
+    if (kind == 3 && l1 == l0 + 1) effects++;
+  }
+  check(effects == 4, "every capsule does what its picture says");
+  // the extra balls stop at five
+  bricks::simReset();
+  bricks::simPaddleTo(120);
+  bricks::simStep(1);
+  bricks::simLaunch();
+  for (int k = 0; k < 4; k++) {
+    bricks::simDrop(3, 120, bricks::simPaddleY() - 40);
+    for (int t = 0; t < 40 && bricks::simCapsules(); t++) bricks::simStep(1);
+  }
+  check(bricks::simLives() == 5, "an extra ball is never the sixth");
+
+  bricks::simNoDrops(false);
+  bricks::simAnimate(true);
+  printf("  %d games, %d levels cleared, %d balls launched and missed\n", games, levels, launches);
+}
+
 /* ---------- texts ---------- */
 
 static void testTexts() {
@@ -301,14 +441,16 @@ static void testTexts() {
   static const StrId STATUS[] = {S_M_READY, S_M_PLAY, S_M_PLAY_FLAG, S_M_WON, S_M_WON_BEST, S_M_LOST, S_M_CONFIRM, S_L_PROMPT, S_L_PICKED,
                                  S_L_PICK_FIRST, S_L_BLOCKED, S_L_LINE, S_L_LUCKY, S_L_OVER, S_L_OVER_BEST, S_L_CONFIRM, S_FOOT, S_PICK,
                                  S_PAL_HINT, S_PAL_OWN_HINT,
-                                 S_B_PROMPT, S_B_POP, S_B_POP_DROP, S_B_ROW, S_B_WON, S_B_WON_BEST, S_B_LOST, S_B_LOST_BEST};
+                                 S_B_PROMPT, S_B_POP, S_B_POP_DROP, S_B_ROW, S_B_WON, S_B_WON_BEST, S_B_LOST, S_B_LOST_BEST,
+                                 S_K_READY, S_K_PLAY, S_K_PAUSE, S_K_LOST, S_K_CLEAR, S_K_WIDE, S_K_SLOW, S_K_MULTI,
+                                 S_K_LIFE, S_K_OVER, S_K_OVER_BEST};
   struct Fit { StrId id; int width; const Font* font; };
   static const Fit BUTTONS[] = {{S_MENU, 64, &FONT_M}, {S_M_NEW, 62, &FONT_M}, {S_M_DIG, 64, &FONT_M}, {S_M_FLAG, 64, &FONT_M}, {S_L_NEW, 143, &FONT_M},
-                                {S_MINES, 154, &FONT_M}, {S_LINES, 154, &FONT_M}, {S_BUBBLES, 154, &FONT_M}, {S_SETTINGS, 206, &FONT_M},
+                                {S_MINES, 154, &FONT_M}, {S_LINES, 154, &FONT_M}, {S_BUBBLES, 154, &FONT_M}, {S_BRICKS, 154, &FONT_M}, {S_SETTINGS, 206, &FONT_M},
                                 {S_TITLE, 236, &FONT_L}, {S_SET_LANG, 86, &FONT_M},
                                 {S_SET_SOUND, 86, &FONT_M}, {S_SET_SCREEN, 86, &FONT_M}, {S_SET_COLORS, 86, &FONT_M}, {S_SET_MARKS, 86, &FONT_M}, {S_FLIP, 118, &FONT_M},
                                 {S_NORMAL, 118, &FONT_M}, {S_INVERTED, 118, &FONT_M}, {S_SET_CAL, 206, &FONT_M}, {S_SET_RESET, 206, &FONT_M},
-                                {S_SET_RESET_SURE, 206, &FONT_M}, {S_SET_RESET_DONE, 206, &FONT_M}, {S_L_SCORE, 56, &FONT_S}, {S_L_NEXT, 52, &FONT_S}, {S_BEST, 56, &FONT_S}, {S_B_ROW_IN, 58, &FONT_S},
+                                {S_SET_RESET_SURE, 206, &FONT_M}, {S_SET_RESET_DONE, 206, &FONT_M}, {S_L_SCORE, 56, &FONT_S}, {S_L_NEXT, 52, &FONT_S}, {S_BEST, 56, &FONT_S}, {S_B_ROW_IN, 58, &FONT_S}, {S_K_LEVEL, 58, &FONT_S}, {S_K_BALLS, 52, &FONT_S},
                                 {S_PAL_TITLE, 206, &FONT_M}, {S_PAL_TITLE, 236, &FONT_L}, {S_PAL_OWN, 236, &FONT_L},
                                 {S_PAL_RESET, 94, &FONT_M}, {S_PAL_DONE, 94, &FONT_M}};
   for (app::lang = 0; app::lang < 2; app::lang++) {
@@ -340,19 +482,19 @@ static void testScreens() {
     check(app::simScreen() == app::SCR_MENU, "boot ends in the menu");
     check(sim::logText().find("ready") != std::string::npos, "calibration succeeded on the first try");
     if (panel == 0) { sim::shot("03-menu-ru"); printf("%s", sim::logText().c_str()); }
-    tap(120, 100); check(app::simScreen() == app::SCR_MINES, "the Minesweeper button opens Minesweeper");
+    tap(120, 85); check(app::simScreen() == app::SCR_MINES, "the Minesweeper button opens Minesweeper");
     tap(40, 305); check(app::simScreen() == app::SCR_MENU, "Menu leads back");
-    tap(120, 156); check(app::simScreen() == app::SCR_LINES, "the Five in a Line button opens it");
+    tap(120, 135); check(app::simScreen() == app::SCR_LINES, "the Five in a Line button opens it");
     tap(40, 305);
-    tap(120, 212); check(app::simScreen() == app::SCR_BUBBLES, "the Bubbles button opens Bubbles");
+    tap(120, 185); check(app::simScreen() == app::SCR_BUBBLES, "the Bubbles button opens Bubbles");
     tap(40, 305);
-    tap(120, 266); check(app::simScreen() == app::SCR_SETTINGS, "the Settings button opens settings");
+    tap(120, 279); check(app::simScreen() == app::SCR_SETTINGS, "the Settings button opens settings");
     tap(120, 303); check(app::simScreen() == app::SCR_MENU, "settings lead back");
   }
 
   // Minesweeper by touch: a tap opens, a long press flags, the mode switch swaps them
   firstBoot(7, 0, 0, false);
-  tap(120, 100);
+  tap(120, 85);
   sim::shot("04-mines-start");
   tap(mines::simCellX(40), mines::simCellY(40));
   check(mines::simStatus() == 1 && mines::simOpen()[40], "a tap opens a cell and starts the game");
@@ -372,7 +514,7 @@ static void testScreens() {
   tap(199, 305);                                               // back to Dig
   // open a few more safe cells for a fuller picture
   for (int i = 0, done = 0; i < 81 && done < 6; i++) if (!mines::simOpen()[i] && !mines::simMine()[i]) { mines::simPrimary(i); done++; }
-  tap(40, 305); tap(120, 100);                                 // out to the menu and back: the game must still be there
+  tap(40, 305); tap(120, 85);                                 // out to the menu and back: the game must still be there
   check(mines::simStatus() == 1 && mines::simOpen()[40], "the game survives a trip to the menu");
   run(2100);
   sim::shot("05-mines-play");
@@ -391,7 +533,7 @@ static void testScreens() {
   tap(mines::simCellX(120), mines::simCellY(120));
   for (int i = 0, done = 0; i < 256 && done < 25; i++) if (!mines::simOpen()[i] && !mines::simMine()[i]) { mines::simPrimary(i); done++; }
   for (int i = 0, done = 0; i < 256 && done < 9; i++) if (mines::simMine()[i]) { mines::simSecondary(i); done++; }
-  tap(40, 305); tap(120, 100);
+  tap(40, 305); tap(120, 85);
   sim::shot("08-mines-16");
   // win on 9 x 9 and check the best time is kept
   tap(120, 305); run(200); tap(120, 305);
@@ -399,14 +541,14 @@ static void testScreens() {
   tap(mines::simCellX(40), mines::simCellY(40));
   run(1500);
   for (int i = 0; i < 81; i++) if (!mines::simOpen()[i] && !mines::simMine()[i]) mines::simPrimary(i);
-  tap(40, 305); tap(120, 100);
+  tap(40, 305); tap(120, 85);
   check(mines::simStatus() == 2 && mines::bestTenths(0) > 0, "a win is kept as the best time");
   sim::shot("09-mines-won");
   tap(40, 305);
   sim::shot("10-menu-with-best");
 
   // Five in a Line by touch
-  tap(120, 156);
+  tap(120, 135);
   sim::shot("11-lines-start");
   uint8_t* b = lines::simBoard();
   int src = -1, dst = -1;
@@ -422,7 +564,7 @@ static void testScreens() {
   // build a line by hand: four in a row plus the mover
   memset(b, 0, 81);
   b[9 * 4 + 0] = b[9 * 4 + 1] = b[9 * 4 + 2] = b[9 * 4 + 3] = 3; b[9 * 6 + 4] = 3; b[0] = 1; b[8] = 2; b[80] = 5; b[72] = 6; b[44] = 7; b[13] = 4;
-  tap(40, 305); tap(120, 156);
+  tap(40, 305); tap(120, 135);
   sim::shot("13-lines-before-line");
   tap(lines::simCellX(9 * 6 + 4), lines::simCellY(9 * 6 + 4));
   tap(lines::simCellX(9 * 4 + 4), lines::simCellY(9 * 4 + 4));
@@ -437,14 +579,14 @@ static void testScreens() {
   for (int i = 0; i < 81; i++) b[i] = (uint8_t)(1 + (i * 3 + i / 9 * 2) % 7);
   b[0] = 0; b[1] = 0; b[9] = 0;
   run(3800);
-  tap(40, 305); tap(120, 156);
+  tap(40, 305); tap(120, 135);
   tap(lines::simCellX(10), lines::simCellY(10)); tap(lines::simCellX(9), lines::simCellY(9));
   check(lines::simOver(), "the game ends when the board fills up");
   sim::shot("16-lines-over");
   tap(40, 305);
 
   // Bubbles by touch: the finger aims and lifting it takes the shot
-  tap(120, 212);
+  tap(120, 185);
   bubLoad();
   uint8_t* bg = bubbles::simGrid();
   const int BCOLS = bubbles::simCols(), BCELLS = bubbles::simMaxRows() * BCOLS;
@@ -465,7 +607,7 @@ static void testScreens() {
   // against what a full repaint would have drawn.
   std::vector<uint16_t> drawn;
   for (int y = 36; y < 270; y++) for (int x = 10; x < 230; x++) drawn.push_back(sim::pixel(x, y));
-  tap(40, 305); tap(120, 212);                 // a trip to the menu and back repaints the screen from scratch
+  tap(40, 305); tap(120, 185);                 // a trip to the menu and back repaints the screen from scratch
   size_t at = 0;
   int differ = 0;
   for (int y = 36; y < 270; y++) for (int x = 10; x < 230; x++) if (drawn[at++] != sim::pixel(x, y)) differ++;
@@ -476,17 +618,17 @@ static void testScreens() {
   memset(bg, 0, BCELLS);
   bg[4] = bg[5] = 3; bg[0] = 6;
   bubbles::simLoaded(3, 6);
-  tap(40, 305); tap(120, 212);
+  tap(40, 305); tap(120, 185);
   sim::shot("19-bubbles-before-pop");
-  tap(120, 100);
+  tap(120, 85);
   check(bubbles::simScore() == 30 && bTotal() == 1, "three of a colour pop for ten points each");
 
   // and the same shot on a field of nothing else clears it
   memset(bg, 0, BCELLS);
   bg[4] = bg[5] = 3;
   bubbles::simLoaded(3, 3);
-  tap(40, 305); tap(120, 212);
-  tap(120, 100);
+  tap(40, 305); tap(120, 185);
+  tap(120, 85);
   check(bubbles::simOver() && bubbles::simWon(), "an empty field wins the game");
 
   // a full field has nowhere left but below the red line
@@ -494,27 +636,102 @@ static void testScreens() {
   for (int r = 0; r < bubbles::simMaxRows(); r++) for (int c = 0; c < BCOLS; c++)
     bg[r * BCOLS + c] = (uint8_t)(r < bubbles::simFieldRows() && c < bubbles::simRowLen(r) ? 1 : 0);
   bubbles::simLoaded(2, 2);
-  tap(40, 305); tap(120, 212);
-  tap(120, 100);
+  tap(40, 305); tap(120, 185);
+  tap(120, 85);
   check(bubbles::simOver() && !bubbles::simWon() && bLowest() >= bubbles::simFieldRows(), "a bubble below the line loses the game");
   sim::shot("20-bubbles-over");
   tap(40, 305);
 
+  // Bricks by touch: a drag anywhere on the field moves the paddle, a tap launches the ball
+  tap(120, 235);
+  check(app::simScreen() == app::SCR_BRICKS, "the Bricks button opens Bricks");
+  check(bricks::simState() == BS_READY && bricks::simBalls() == 1 && bricks::simStuck(0) &&
+        bricks::simLives() == 3 && bricks::simLevel() == 1, "a new game waits with the ball on the paddle");
+  sim::shot("21-bricks-start");
+  // the pretend panel reports the second position without ever letting go, which is what a drag looks like
+  int padWas = bricks::simPaddleX();
+  sim::tapAt(40, 240, 60, 160);
+  sim::tapAt(0, 240, 200, 160);
+  finishQueue();
+  check(bricks::simPaddleX() > padWas + 40 && bricks::simState() == BS_READY,
+        "a finger dragged to the right takes the paddle with it, and a drag does not launch the ball");
+  padWas = bricks::simPaddleX();
+  sim::tapAt(40, 240, 200, 160);
+  sim::tapAt(0, 240, 40, 160);
+  finishQueue();
+  check(bricks::simPaddleX() < padWas - 40, "and dragging the other way brings it back");
+  tap(120, 160);
+  check(bricks::simState() == BS_PLAY && !bricks::simStuck(0), "a tap launches the ball");
+  for (int beat = 0; beat < 900; beat++) { kCatch(beat); app::loop(); }
+  check(bricks::simScore() > 0 && bricks::simLives() == 3, "and the ball breaks bricks on the way");
+  bricks::simDrop(0, 120, 170);                // one capsule on its way down, for the picture
+  for (int beat = 0; beat < 250; beat++) { kCatch(beat); app::loop(); }
+  sim::shot("22-bricks-play");
+
+  // Bricks draws in pieces as Bubbles does: the ball, the paddle, the capsules and the chips of a broken
+  // brick are each rubbed out by repainting the little box they were in. An erase box one pixel short of the
+  // thing it erases leaves a trail, and the only way to see that from here is to compare the field against
+  // what a full repaint would have drawn. enter() is the full repaint, and no game time passes in it.
+  const int KL = bricks::simLeft(), KR = bricks::simRight(), KT = bricks::simTop(), KF = bricks::simFloor();
+  run(80);                                     // nothing drives the paddle here, so a step lands and draws it
+  std::vector<uint16_t> field;
+  for (int y = KT; y < KF; y++) for (int x = KL; x < KR; x++) field.push_back(sim::pixel(x, y));
+  bricks::enter();
+  size_t seen = 0;
+  int unlike = 0;
+  for (int y = KT; y < KF; y++) for (int x = KL; x < KR; x++) if (field[seen++] != sim::pixel(x, y)) unlike++;
+  check(!unlike, "in play the field matches a full repaint, so nothing is left drawn on it");
+
+  // played out to the end, with a paddle that stands on the wrong side on purpose
+  bricks::simReset();
+  bricks::enter();
+  for (int guard = 0; guard < 30000 && bricks::simState() != BS_OVER; guard++) {
+    if (bricks::simState() == BS_READY) bricks::simLaunch();
+    kMiss();
+    app::loop();
+  }
+  check(bricks::simState() == BS_OVER && !bricks::simLives(), "the game is over once the last ball is gone");
+  sim::shot("23-bricks-over");
+  tap(120, 305);                               // New game
+  check(bricks::simState() == BS_READY && bricks::simLives() == 3 && !bricks::simScore(),
+        "New game puts three balls back on the first wall");
+
+  // the fourth wall, played into: it has the strong bricks that crack and the steel ones that never break
+  bricks::simAnimate(false);
+  for (int beat = 0; beat < 120000 && bricks::simLevel() < 4; beat++) {
+    if (bricks::simState() == BS_READY) bricks::simLaunch();
+    kCatch(beat);
+    bricks::simStep(1);
+  }
+  for (int beat = 0; beat < 1200; beat++) {
+    if (bricks::simState() == BS_READY) bricks::simLaunch();
+    kCatch(beat);
+    bricks::simStep(1);
+  }
+  bricks::simAnimate(true);
+  bricks::enter();
+  check(bricks::simLevel() == 4 && bricks::simBricks(BK_STEEL) > 0, "the fourth wall is reached with its steel standing");
+  sim::shot("24-bricks-steel");
+  tap(120, 305); tap(120, 305);                // New game, asked and confirmed
+  tap(40, 305);
+  sim::shot("25-menu-four-games");
+
   // settings: language, flip (touch must still land), the marble colours, reset
-  tap(120, 266);
-  sim::shot("21-settings-ru");
+  tap(120, 279);
+  sim::shot("26-settings-ru");
   tap(198, 60);
   check(app::lang == 1, "EN switches the language");
-  sim::shot("22-settings-en");
+  sim::shot("27-settings-en");
   tap(164, 128);
   check(app::flip, "Turn over flips the screen");
   tap(120, 303);
   check(app::simScreen() == app::SCR_MENU, "after the flip the touch still lands where the picture is");
-  sim::shot("23-menu-en");
-  tap(120, 100); sim::shot("24-mines-en"); tap(40, 305);
-  tap(120, 156); sim::shot("25-lines-en"); tap(40, 305);
-  tap(120, 212); sim::shot("26-bubbles-en"); tap(40, 305);
-  tap(120, 266); tap(164, 128);
+  sim::shot("28-menu-en");
+  tap(120, 85); sim::shot("29-mines-en"); tap(40, 305);
+  tap(120, 135); sim::shot("30-lines-en"); tap(40, 305);
+  tap(120, 185); sim::shot("31-bubbles-en"); tap(40, 305);
+  tap(120, 235); sim::shot("32-bricks-en"); tap(40, 305);
+  tap(120, 279); tap(164, 128);
   check(!app::flip, "and flips back");
 
   // sound: silence and three steps, picked out of a row of four
@@ -533,25 +750,25 @@ static void testScreens() {
   tap(120, 201);
   check(app::simScreen() == app::SCR_PALETTE, "Marble colours opens the picking screen");
   check(app::palette == 0 && app::marks, "it starts on the first set with the marks on");
-  sim::shot("27-palette");
+  sim::shot("33-palette");
   tap(120, 118);
   check(app::palette == 1, "a tap picks the second set");
   tap(164, 242);
   check(!app::marks, "Marks turns the signs on the marbles off");
-  sim::shot("28-palette-second-no-marks");
+  sim::shot("34-palette-second-no-marks");
   tap(120, 290);
   check(app::simScreen() == app::SCR_SETTINGS, "and the screen leads back to settings");
-  tap(120, 303); tap(120, 156); sim::shot("29-lines-set-2"); tap(40, 305);
-  tap(120, 266); tap(120, 201); tap(120, 158);
+  tap(120, 303); tap(120, 135); sim::shot("35-lines-set-2"); tap(40, 305);
+  tap(120, 279); tap(120, 201); tap(120, 158);
   check(app::palette == 2, "the third set can be picked too");
-  tap(120, 290); tap(120, 303); tap(120, 156); sim::shot("30-lines-set-3"); tap(40, 305);
+  tap(120, 290); tap(120, 303); tap(120, 135); sim::shot("36-lines-set-3"); tap(40, 305);
 
   // the fourth row is the player's own set, and picking it opens the screen that changes it
   int r0, g0, b0, r1, g1, b1;
   lines::customGet(2, r0, g0, b0);
-  tap(120, 266); tap(120, 201); tap(120, 198);
+  tap(120, 279); tap(120, 201); tap(120, 198);
   check(app::palette == 3 && app::simScreen() == app::SCR_OWN, "the fourth row is the player's own and opens for changing");
-  sim::shot("31-own-colours");
+  sim::shot("37-own-colours");
   tap(60, 71);                                                 // the second marble
   tap(22, 110);                                                // the first square of the grid: a vivid red
   lines::customGet(2, r1, g1, b1);
@@ -560,14 +777,14 @@ static void testScreens() {
   tap(190, 230);                                               // and a square of the bottom row
   lines::customGet(2, r1, g1, b1);
   check(r1 == g1 && g1 == b1 && r1 > 200, "the bottom row of the grid holds colours with no hue at all");
-  sim::shot("32-own-changed");
+  sim::shot("38-own-changed");
   tap(176, 288);
   check(app::simScreen() == app::SCR_PALETTE, "Done leads back to the sets");
-  tap(120, 290); tap(120, 303); tap(120, 156);
-  sim::shot("33-lines-own");                                   // the board is drawn with the changed set
+  tap(120, 290); tap(120, 303); tap(120, 135);
+  sim::shot("39-lines-own");                                   // the board is drawn with the changed set
   tap(40, 305);
   // in again, put the set back and return to the first one
-  tap(120, 266); tap(120, 201); tap(120, 198);
+  tap(120, 279); tap(120, 201); tap(120, 198);
   tap(64, 288);
   lines::customGet(2, r1, g1, b1);
   check(r1 == r0 && g1 == g0 && b1 == b0, "Reset puts the first set back");
@@ -576,7 +793,7 @@ static void testScreens() {
   check(app::palette == 0 && app::marks, "the first set and the marks come back");
   tap(120, 290);
 
-  tap(120, 269); sim::shot("34-settings-reset-armed"); tap(120, 269);
+  tap(120, 269); sim::shot("40-settings-reset-armed"); tap(120, 269);
   check(mines::bestTenths(0) == 0 && lines::best() == 0 && bubbles::best() == 0, "Reset best results clears them after a second press");
   tap(120, 303);
 
@@ -588,7 +805,7 @@ static void testScreens() {
   app::setup(); run(100);
   check(app::simScreen() == app::SCR_MENU && app::lang == 1 && app::soundLevel == 2,
         "after a restart the calibration, the language and the sound step are remembered");
-  tap(120, 100);
+  tap(120, 85);
   check(app::simScreen() == app::SCR_MINES, "and the stored calibration still works");
 
   // a finger held on the screen through the splash forces a new calibration
@@ -607,6 +824,7 @@ int main(int argc, char** argv) {
   testMines();
   testLines();
   testBubbles();
+  testBricks();
   testTexts();
   testScreens();
   printf("%d checks passed, %d failed\n", passed, failed);

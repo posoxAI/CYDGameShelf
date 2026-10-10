@@ -6,7 +6,7 @@
 
 // Every text on the device, in Russian and in English.
 enum StrId {
-  S_TITLE, S_PICK, S_MINES, S_LINES, S_BUBBLES, S_SETTINGS, S_FOOT,
+  S_TITLE, S_PICK, S_MINES, S_LINES, S_BUBBLES, S_BRICKS, S_SETTINGS, S_FOOT,
   S_MENU, S_BEST, S_NO_BEST,
   // minesweeper
   S_M_NEW, S_M_DIG, S_M_FLAG, S_M_READY, S_M_PLAY, S_M_PLAY_FLAG, S_M_WON, S_M_WON_BEST, S_M_LOST, S_M_CONFIRM,
@@ -15,6 +15,9 @@ enum StrId {
   S_L_OVER, S_L_OVER_BEST, S_L_CONFIRM,
   // bubbles
   S_B_ROW_IN, S_B_PROMPT, S_B_POP, S_B_POP_DROP, S_B_ROW, S_B_WON, S_B_WON_BEST, S_B_LOST, S_B_LOST_BEST,
+  // bricks
+  S_K_LEVEL, S_K_BALLS, S_K_READY, S_K_PLAY, S_K_PAUSE, S_K_LOST, S_K_CLEAR,
+  S_K_WIDE, S_K_SLOW, S_K_MULTI, S_K_LIFE, S_K_OVER, S_K_OVER_BEST,
   // settings
   S_SET_LANG, S_SET_SOUND, S_SET_SCREEN, S_SET_COLORS, S_SET_MARKS, S_ON, S_OFF, S_FLIP, S_NORMAL, S_INVERTED,
   S_SET_CAL, S_SET_RESET, S_SET_RESET_SURE, S_SET_RESET_DONE,
@@ -26,7 +29,7 @@ const char* T(StrId id);
 
 namespace app {
 
-enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_BUBBLES, SCR_SETTINGS, SCR_PALETTE, SCR_OWN };
+enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_BUBBLES, SCR_BRICKS, SCR_SETTINGS, SCR_PALETTE, SCR_OWN };
 
 extern int lang;             // 0 Russian, 1 English
 extern int soundLevel;       // 0 silent, then 1 quiet, 2 and 3 loudest
@@ -76,6 +79,7 @@ void update();
 int best();
 void resetBest();
 uint16_t ballColor(int c);           // colour 1..7 of a marble, so the menu icon matches the game
+uint16_t ballShade(int c, int percent);   // the same colour darker or lighter: 100 is itself
 int paletteCount();                  // sets to choose from; the last one is the player's own
 int presetCount();                   // of those, the ready-made ones
 void drawSample(int cx, int cy, int r, int c, int pal);   // one marble of any set, for the picking screen
@@ -90,4 +94,12 @@ void enter();
 void update();
 int best();
 void resetBest();
+}
+
+namespace bricks {
+void enter();
+void update();
+int best();
+void resetBest();
+void drawIcon(int x, int y);         // the little wall with a ball, for the menu
 }

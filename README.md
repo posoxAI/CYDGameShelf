@@ -2,20 +2,21 @@
 
 [Русская версия](README.ru.md)
 
-Three games and a menu for the "Cheap Yellow Display", the ESP32 board with a 2.8-inch touch screen: Minesweeper, Five in a Line and Bubbles. The interface is in English and Russian.
+Four games and a menu for the "Cheap Yellow Display", the ESP32 board with a 2.8-inch touch screen: Minesweeper, Five in a Line, Bubbles and Bricks. The interface is in English and Russian.
 
 <p>
-  <img src="screenshots/menu-en.png" width="180" alt="The menu: Minesweeper, Five in a Line, Bubbles, Settings">
+  <img src="screenshots/menu-en.png" width="180" alt="The menu: Minesweeper, Five in a Line, Bubbles, Bricks, Settings">
   <img src="screenshots/minesweeper-ru.png" width="180" alt="Minesweeper mid-game on the 9 by 9 field, Russian interface">
   <img src="screenshots/lines-ru.png" width="180" alt="Five in a Line after a line was cleared, Russian interface">
   <img src="screenshots/bubbles-ru.png" width="180" alt="Bubbles at the start of a game, the cannon aimed up the middle, Russian interface">
+  <img src="screenshots/bricks-ru.png" width="180" alt="Bricks in play: the ball in flight under the wall, a capsule falling towards the hazard-striped paddle, Russian interface">
 </p>
 
 The pictures come from the computer simulator in `sim/`, which runs the same game code as the board.
 
 ## Status
 
-The game rules and every screen are tested on a computer. The part that talks to the real screen, touch panel and flash memory is short and follows the usual setup for this board, but it could not be compiled or run where the code was written. Expect to adjust something on the first run; the Troubleshooting section lists the likely things.
+The game rules and every screen are tested on a computer, and the firmware builds, flashes and comes up on the board. Boards differ, so expect to adjust something on a first run; the Troubleshooting section lists the likely things. Bricks is the newest game and the only one that moves without being touched, so how its paddle answers a finger on a resistive panel is worth judging on the board rather than from a picture.
 
 ## The board
 
@@ -47,7 +48,9 @@ Both are remembered. They can be changed later in Settings.
 
 **Bubbles.** Drag a finger over the field to aim the cannon and lift it to shoot; lifting below the cannon takes the shot back. A dotted line shows where the bubble will go, bouncing off the side walls on the way. Three or more of one colour touching pop for 10 each, and whatever is left hanging without support falls for 20. Every fifth shot that pops nothing brings a new row down from the top. Tapping the waiting bubble under Next swaps it with the loaded one. The game is won when the field is empty and lost when a bubble passes the red line.
 
-A game stays in memory while you are in the menu or in the other game. It is lost when the power goes off.
+**Bricks.** Drag a finger anywhere on the field and the paddle follows the movement, so the finger never hides it; a tap launches the ball. The further from the middle of the paddle the ball lands, the steeper it flies off, and every hit on the paddle makes it a little faster. A coloured brick breaks at one hit for 10 points, a dark one takes two and cracks after the first for 20, and a steel one with bolts never breaks and is not needed to clear the level. A cleared level adds 100 points times its number. Broken bricks sometimes drop a capsule to catch with the paddle: a wider paddle, a slower ball, three balls at once or an extra ball. You have three balls; a ball that falls past the paddle is lost. There are six walls, and after the sixth they come round again, faster.
+
+A game stays in memory while you are in the menu or in another game. It is lost when the power goes off. Leaving Bricks for the menu pauses it, and a tap brings it back.
 
 ## Settings
 
@@ -55,7 +58,7 @@ A game stays in memory while you are in the menu or in the other game. It is los
 - Sound: simple tones on the speaker connector, in four steps — off, then quiet, middle and loud, shown as a cross and the numbers 1 to 3. The chosen step is heard straight away in the note that confirms the tap. Nothing is heard unless a speaker is plugged in.
 - Screen: turns the picture by 180 degrees.
 - Colours: for boards that show the colours inverted.
-- Ball colours: four rows of colours for the marbles of Five in a Line and the bubbles, shown one above the other at the size they have in the game. Panels differ from board to board, so the readable set is the one that looks readable on yours — pick it there. Three rows are ready-made; the fourth is yours, and tapping it opens a screen where each marble is given a colour out of a grid of squares. Reset puts the first set back. The picking screen also holds Marks: a little sign inside every marble, a dot, a ring, a bar and so on, one for each colour. Marks start on, because these panels render some colours close to each other; turn them off for plain marbles.
+- Ball colours: four rows of colours for the marbles of Five in a Line, the bubbles and the brick faces, shown one above the other at the size they have in the game. Panels differ from board to board, so the readable set is the one that looks readable on yours — pick it there. Three rows are ready-made; the fourth is yours, and tapping it opens a screen where each marble is given a colour out of a grid of squares. Reset puts the first set back. The picking screen also holds Marks: a little sign inside every marble, a dot, a ring, a bar and so on, one for each colour. Marks start on, because these panels render some colours close to each other; turn them off for plain marbles.
 - Touch calibration.
 - Reset best results.
 
@@ -83,7 +86,7 @@ The script builds the games with `g++`, plays several hundred games of each to c
 ## Files
 
 - `src/app.cpp`: touch, sound, settings, calibration, menu.
-- `src/game_mines.cpp`, `src/game_lines.cpp`, `src/game_bubbles.cpp`: the games.
+- `src/game_mines.cpp`, `src/game_lines.cpp`, `src/game_bubbles.cpp`, `src/game_bricks.cpp`: the games.
 - `src/ui.cpp`, `src/font_data.cpp`: text drawing and the fonts. The fonts are generated by `tools/make_font.py`.
 - `src/strings.cpp`: every text in both languages.
 - `src/hw.h`: what the games need from the board. `src/hw_esp32.cpp` provides it on the board, `sim/hw_host.cpp` on a computer.
@@ -93,7 +96,7 @@ The script builds the games with `g++`, plays several hundred games of each to c
 
 The firmware was written by Claude, the AI assistant made by Anthropic: the game logic, the screens, the touch handling and the simulator.
 
-The idea and the choice of games came from posoxAI. All three are ports of browser originals, which can be played in a browser right now: Minesweeper ([play](https://posoxai.github.io/MinesweeperGame/), [code](https://github.com/posoxAI/MinesweeperGame)), Five in a Line ([play](https://posoxai.github.io/FiveInLineGame/), [code](https://github.com/posoxAI/FiveInLineGame)) and Bubbles ([play](https://posoxai.github.io/Bubbles/), [code](https://github.com/posoxAI/Bubbles)). The other games on the shelf are at [Игротека](https://posoxai.github.io/posoxAI/).
+The idea and the choice of games came from posoxAI. All four are ports of browser originals, which can be played in a browser right now: Minesweeper ([play](https://posoxai.github.io/MinesweeperGame/), [code](https://github.com/posoxAI/MinesweeperGame)), Five in a Line ([play](https://posoxai.github.io/FiveInLineGame/), [code](https://github.com/posoxAI/FiveInLineGame)), Bubbles ([play](https://posoxai.github.io/Bubbles/), [code](https://github.com/posoxAI/Bubbles)) and Bricks ([play](https://posoxai.github.io/Bricks/), [code](https://github.com/posoxAI/Bricks)). The other games on the shelf are at [Игротека](https://posoxai.github.io/posoxAI/).
 
 The case in `case/` was designed by Claude too, from posoxAI's measurements and test prints.
 

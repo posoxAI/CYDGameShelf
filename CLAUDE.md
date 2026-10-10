@@ -1,6 +1,6 @@
 # CYD Game Shelf — notes for Claude
 
-Firmware for the ESP32-2432S028R "Cheap Yellow Display" (one micro-USB, ILI9341 240 × 320, XPT2046 resistive touch): a menu, Minesweeper, Five in a Line and Bubbles, in Russian and English. The whole thing is about 5300 lines and has no framework beyond Arduino and TFT_eSPI.
+Firmware for the ESP32-2432S028R "Cheap Yellow Display" (one micro-USB, ILI9341 240 × 320, XPT2046 resistive touch): a menu, Minesweeper, Five in a Line, Bubbles and Bricks, in Russian and English. The whole thing is about 6000 lines and has no framework beyond Arduino and TFT_eSPI.
 
 ## Where the games come from
 
@@ -9,9 +9,20 @@ Every game is a port of a browser original by posoxAI, each a single HTML file. 
 - Minesweeper: [play](https://posoxai.github.io/MinesweeperGame/) · [code](https://github.com/posoxAI/MinesweeperGame)
 - Five in a Line: [play](https://posoxai.github.io/FiveInLineGame/) · [code](https://github.com/posoxAI/FiveInLineGame)
 - Bubbles: [play](https://posoxai.github.io/Bubbles/) · [code](https://github.com/posoxAI/Bubbles)
+- Bricks: [play](https://posoxai.github.io/Bricks/) · [code](https://github.com/posoxAI/Bricks)
 - the rest of the shelf: [Игротека](https://posoxai.github.io/posoxAI/)
 
 The port is not a copy: the screen is 240 × 320 and the input is a fingertip, so layouts and cell sizes differ on purpose. Rules match, pixels do not. Bubbles is the clearest case — the browser field is 11 × 13 and the device's is 11 × 11, because the cannon needs the bottom of a 320-pixel screen, and the browser's mouse-point-and-click becomes drag-to-aim-and-lift-to-shoot.
+
+Bricks is the one place where the geometry lined up: the browser wall is ten bricks wide and so is a 240-pixel screen at 22 pixels a brick, so all six levels are copied over letter for letter. Everything else there is two thirds of its browser size — paddle, ball, capsules and every speed — because the screen is 240 × 320 against 360 × 480.
+
+## The one game that runs on a clock
+
+Bricks is the only screen that moves without being touched. It steps in fixed 20-millisecond pieces counted off `hw::ms()`, never in whatever time the last frame happened to take, and it catches up at most three steps at once. That matters because the simulator's clock only advances inside `hw::sleepMs`, so the same game plays identically on the board and in the tests — which is what makes the physics as testable as the turn-based rules. Keep the step fixed; a step sized from the elapsed time would make every test depend on how fast the computer is.
+
+It also draws in pieces, like Bubbles: `repaintArea` puts back the background, the mortar, the bricks and the paddle in one small box, and everything that moves is rubbed out that way. `drawThings` is the one place the ball, the capsules and the chips are drawn, so a full repaint and a frame-by-frame one agree pixel for pixel — `testScreens` compares the two and fails on a one-pixel trail. It only agrees just after a step, though: the paddle is drawn on the step, not on the touch that moved it.
+
+The sound is one square-wave pin and a queue of eight notes, not a mixer. Hits use `snd::play`, which drops whatever is queued, so a fast volley cuts its own notes short instead of backing up into a drone several seconds behind the ball.
 
 ## Two targets, and the order to use them
 
@@ -50,13 +61,13 @@ Three places, in step:
 
 ## Settings kept in flash
 
-`hw::saveInt`/`hw::loadInt` over NVS; keys are at most 15 characters. In use: `lang`, `vol` (0 silent, 1…3 the loudness steps; `sound` is the older on/off key, still read once so a board that was muted stays muted), `flip`, `inv`, `marks`, `pal`, `cc1`…`cc7` (the player's own ball colours, one packed RGB each), `calok` and `cal0`…`cal5` (the touch calibration, each ×65536), `msize`, `mbest0`, `mbest1`, `lbest`, `bbest`. Reuse a key and you silently inherit someone else's value.
+`hw::saveInt`/`hw::loadInt` over NVS; keys are at most 15 characters. In use: `lang`, `vol` (0 silent, 1…3 the loudness steps; `sound` is the older on/off key, still read once so a board that was muted stays muted), `flip`, `inv`, `marks`, `pal`, `cc1`…`cc7` (the player's own ball colours, one packed RGB each), `calok` and `cal0`…`cal5` (the touch calibration, each ×65536), `msize`, `mbest0`, `mbest1`, `lbest`, `bbest`, `kbest`. Reuse a key and you silently inherit someone else's value.
 
 ## Colours on the real panel
 
 The panel washes light colours out and shifts them in ways the simulator does not reproduce — the sim renders RGB565 faithfully, so **a screenshot is never evidence about how something looks on the board**. Two blind palette guesses were both rejected on hardware. Hence the on-device picker: three preset palettes plus a fully editable one (Settings → Ball colours), and Marks — a dot, ring, bar, cross, triangle, square or slash inside each ball — so readability does not depend on hue at all. Do not retune palette constants from screenshots; change the picker, or ask what the board shows.
 
-That one set colours both games. Bubbles draws its bubbles with `lines::drawSample` and colours 1…6 of the same palette, rather than carrying a second set that would have to be settled on hardware all over again.
+That one set colours three games. Bubbles draws its bubbles with `lines::drawSample` and colours 1…6 of the same palette, and Bricks paints its brick faces with `lines::ballColor` and `lines::ballShade` of the same six, rather than carrying more sets that would have to be settled on hardware all over again. The grey chrome of Bricks — walls, mortar, steel, ball — and the yellow of the paddle are the exception, and they are deliberately the parts where nothing has to be told apart by hue: a strong brick is known by its crack and a steel one by its bolts.
 
 ## Style
 

@@ -195,26 +195,29 @@ static void chooseLanguage() {
 
 /* ---------- menu ---------- */
 
-static const ui::Rect MENU_MINES = {12, 74, 216, 52}, MENU_LINES = {12, 130, 216, 52},
-                      MENU_BUBBLES = {12, 186, 216, 52}, MENU_SET = {12, 246, 216, 40};
+// Four games and the settings fill the screen between the title and the footer, so a row is 46 pixels and
+// holds a 34-pixel picture with the name and the best result beside it.
+static const ui::Rect MENU_MINES = {12, 62, 216, 46}, MENU_LINES = {12, 112, 216, 46},
+                      MENU_BUBBLES = {12, 162, 216, 46}, MENU_BRICKS = {12, 212, 216, 46},
+                      MENU_SET = {12, 264, 216, 30};
 
 static void gameButton(const ui::Rect& r, const char* name, const char* sub) {
   hw::fillRoundRect(r.x, r.y, r.w, r.h, 6, C_PANEL);
-  ui::label(r.x + 56, r.y + 7, r.w - 62, 20, name, FONT_M, C_INK, C_PANEL, ui::LEFT);
-  ui::label(r.x + 56, r.y + 28, r.w - 62, 16, sub, FONT_S, C_MUTED, C_PANEL, ui::LEFT);
+  ui::label(r.x + 56, r.y + 4, r.w - 62, 19, name, FONT_M, C_INK, C_PANEL, ui::LEFT);
+  ui::label(r.x + 56, r.y + 24, r.w - 62, 16, sub, FONT_S, C_MUTED, C_PANEL, ui::LEFT);
 }
 static void drawMenu() {
   char sub[48], t[16];
   hw::fillRect(0, 0, hw::W, hw::H, C_BG);
-  ui::label(0, 12, hw::W, 34, T(S_TITLE), FONT_L, C_INK, C_BG);
-  ui::label(0, 50, hw::W, 18, T(S_PICK), FONT_S, C_MUTED, C_BG);
+  ui::label(0, 6, hw::W, 34, T(S_TITLE), FONT_L, C_INK, C_BG);
+  ui::label(0, 42, hw::W, 16, T(S_PICK), FONT_S, C_MUTED, C_BG);
 
   int b = mines::bestTenths(0);
   if (b) { mines::formatTime(b, t, sizeof t); snprintf(sub, sizeof sub, "%s 9×9: %s", T(S_BEST), t); }
   else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
   gameButton(MENU_MINES, T(S_MINES), sub);
   // a little closed tile with a flag
-  int ix = MENU_MINES.x + 12, iy = MENU_MINES.y + 9;
+  int ix = MENU_MINES.x + 12, iy = MENU_MINES.y + 6;
   hw::fillRect(ix, iy, 34, 34, RGB(58, 74, 92));
   hw::fillRect(ix, iy, 34, 2, RGB(88, 106, 127)); hw::fillRect(ix, iy, 2, 34, RGB(88, 106, 127));
   hw::fillRect(ix, iy + 32, 34, 2, RGB(36, 48, 61)); hw::fillRect(ix + 32, iy, 2, 34, RGB(36, 48, 61));
@@ -225,23 +228,29 @@ static void drawMenu() {
   if (lines::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), lines::best());
   else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
   gameButton(MENU_LINES, T(S_LINES), sub);
-  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_LINES.x + 14 + k * 14, MENU_LINES.y + 26, 6, lines::ballColor(k + 1));
+  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_LINES.x + 14 + k * 14, MENU_LINES.y + 23, 6, lines::ballColor(k + 1));
 
   if (bubbles::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), bubbles::best());
   else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
   gameButton(MENU_BUBBLES, T(S_BUBBLES), sub);
   // three bubbles hanging over a fourth, the way they sit on the field
-  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_BUBBLES.x + 14 + k * 12, MENU_BUBBLES.y + 20, 5, lines::ballColor(k + 4));
-  for (int k = 0; k < 2; k++) hw::fillCircle(MENU_BUBBLES.x + 20 + k * 12, MENU_BUBBLES.y + 30, 5, lines::ballColor(k + 1));
+  for (int k = 0; k < 3; k++) hw::fillCircle(MENU_BUBBLES.x + 14 + k * 12, MENU_BUBBLES.y + 17, 5, lines::ballColor(k + 4));
+  for (int k = 0; k < 2; k++) hw::fillCircle(MENU_BUBBLES.x + 20 + k * 12, MENU_BUBBLES.y + 27, 5, lines::ballColor(k + 1));
+
+  if (bricks::best()) snprintf(sub, sizeof sub, "%s: %d", T(S_BEST), bricks::best());
+  else snprintf(sub, sizeof sub, "%s", T(S_NO_BEST));
+  gameButton(MENU_BRICKS, T(S_BRICKS), sub);
+  bricks::drawIcon(MENU_BRICKS.x + 12, MENU_BRICKS.y + 6);
 
   ui::button(MENU_SET.x, MENU_SET.y, MENU_SET.w, MENU_SET.h, T(S_SETTINGS), FONT_M, C_INK, C_PANEL);
-  ui::label(0, 296, hw::W, 16, T(S_FOOT), FONT_S, C_MUTED, C_BG);
+  ui::label(0, 298, hw::W, 16, T(S_FOOT), FONT_S, C_MUTED, C_BG);
 }
 static void updateMenu() {
   if (!touch.pressed) return;
   if (MENU_MINES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_MINES); }
   else if (MENU_LINES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_LINES); }
   else if (MENU_BUBBLES.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_BUBBLES); }
+  else if (MENU_BRICKS.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_BRICKS); }
   else if (MENU_SET.has(touch.x, touch.y)) { snd::play(880, 25); go(SCR_SETTINGS); }
 }
 
@@ -306,7 +315,7 @@ static void updateSettings() {
   bool redraw = true;
   if (SET_RESET.has(x, y)) {
     if (!resetArmedAt) { resetArmedAt = hw::ms(); resetDone = false; }
-    else { resetArmedAt = 0; resetDone = true; mines::resetBest(); lines::resetBest(); bubbles::resetBest(); snd::play(440, 120); }
+    else { resetArmedAt = 0; resetDone = true; mines::resetBest(); lines::resetBest(); bubbles::resetBest(); bricks::resetBest(); snd::play(440, 120); }
     drawReset();
     return;
   }
@@ -471,7 +480,8 @@ void go(Screen s) {
   else if (s == SCR_OWN) drawOwn();
   else if (s == SCR_MINES) mines::enter();
   else if (s == SCR_LINES) lines::enter();
-  else bubbles::enter();
+  else if (s == SCR_BUBBLES) bubbles::enter();
+  else bricks::enter();
 }
 
 void setup() {
@@ -519,7 +529,8 @@ void loop() {
   else if (current == SCR_OWN) updateOwn();
   else if (current == SCR_MINES) mines::update();
   else if (current == SCR_LINES) lines::update();
-  else bubbles::update();
+  else if (current == SCR_BUBBLES) bubbles::update();
+  else bricks::update();
   hw::sleepMs(3);
 }
 

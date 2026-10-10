@@ -34,3 +34,10 @@ int simScore(); int simMisses(); int simCur(); int simNext(); bool simOver(); bo
 void simReset(); void simLoaded(int a, int b); void simAnimate(bool on); void simAim(int x, int y); void simShoot(); void simPowerOff();
 int simCannonY();
 }
+namespace bricks {
+void simReset(); void simAnimate(bool on); void simNoDrops(bool on); void simStep(int ticks); void simLaunch();
+void simPaddleTo(int x); void simDrop(int kind, int x, int y); void simPowerOff();
+int simPaddleX(); int simPaddleW(); int simBalls(); int simBallX(int k); int simBallY(int k); bool simStuck(int k);
+int simSpeed(); int simScore(); int simLives(); int simLevel(); int simState(); int simCapsules(); int simBricks(int kind);
+int simLeft(); int simRight(); int simTop(); int simFloor(); int simPaddleY(); int simBallR(); int simFieldY();
+}

@@ -80,6 +80,8 @@ static uint16_t shade(int pal, int c, int percent) {   // 100 is the colour itse
   return RGB(v[0], v[1], v[2]);
 }
 uint16_t ballColor(int c) { return shade(app::palette, c, 100); }
+// Bricks asks for the same colours a little darker and a little lighter, for the face and the edges of a brick.
+uint16_t ballShade(int c, int percent) { return shade(app::palette, c, percent); }
 
 // Besides its colour every marble carries its own little sign, so the colours can still be told apart on a
 // panel that renders them poorly. Settings -> Marks turns the signs off. The marbles of the growing and
