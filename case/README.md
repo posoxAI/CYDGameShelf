@@ -8,7 +8,7 @@ A 3D-printed case for the board, made for a resin printer. It runs on two AA cel
 
 ## Status
 
-This is draft 4. Draft 3 was printed: it fitted, but two walls cracked when the parts came off the build plate, and the sliding battery door was too flimsy. Draft 4 has thicker walls and a screwed battery lid instead of the door.
+Draft 4, printed and assembled. Draft 3 fitted, but two walls cracked when the parts came off the build plate and its sliding battery door was too flimsy, so draft 4 has thicker walls and a screwed battery lid. The back now also has a nail catch at the screw end of the lid, so the lid lifts easily once the screw is out; that last change has not been printed yet.
 
 ## Size
 
@@ -47,7 +47,7 @@ Battery holder → switch → converter input; converter output → `P1` on the 
 3. Put the speaker and the converter into their pockets in the back and place the back on the frame.
 4. Screws go in from the face. The two M3 × 12 at the USB end take their nuts in the hex pockets on the outside of the back. The two M3 × 8 at the antenna end take their nuts in the pockets on the battery shelf.
 5. Slide the lid's nut sideways into its slot at the far end of the battery pocket, then put the holder in, leads towards the switch side; they go down through the slot in the shelf.
-6. Lid: hook its two tabs under the antenna-end wall, lower it and fix it with the last M3 × 8.
+6. Lid: hook its two tabs under the antenna-end wall, lower it and fix it with the last M3 × 8. To open it, take the screw out and lift the lid by the nail catch at that end.
 
 ## Changing the model
 

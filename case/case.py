@@ -2,6 +2,7 @@
 # face (screen side), frame, back with the battery step, battery lid - held by four M3 screws through the board holes.
 # Draft 4 vs 3: walls 2.8 instead of 2 (4.5 at the antenna end), thicker face and back, stiffening ribs inside the back,
 # and a stiff battery lid held by two hooks at the antenna end and one M3 screw at the other end instead of a sliding door.
+# Draft 4.1: a nail catch at the screw end of the lid, to lift it once the screw is out.
 # A bought 2 x AA holder (59 x 33 x 16) lies across the back at the antenna end; the rest of the back stays thin.
 # Screws run through all layers: heads sunk in the face, nuts in open hex pockets (back face / holder shelf).
 # Frame: X to the right as you look at the screen, Y along the case (antenna end at 0, USB end at L),
@@ -242,6 +243,8 @@ def make_back():
     b = b.cut(round_corners(box(WALL, W - WALL, WALL_END, BAY_Y1, Z_SHELF, Z_TOP + 1), [(WALL, WALL_END), (W - WALL, WALL_END), (WALL, BAY_Y1), (W - WALL, BAY_Y1)], 1.0))
     b = b.cut(box(W - WALL - 9.5, W - WALL - 0.3, WALL_END + 8, WALL_END + 25, Z_FLOOR - 1, Z_SHELF + 0.1))   # leads go down here
     b = b.cut(lid_outline(0, Z_DOOR, Z_TOP + 1))                                   # recess the lid sits in, on a LEDGE all round
+    ny = LID_SCREW[1] + 3.75                                                        # nail catch past the ear: reaches below the lid
+    b = b.cut(box(W / 2 - 5, W / 2 + 5, ny - 0.3, ny + 2.5, Z_DOOR - 1.2, Z_TOP + 1).edges("|Z").fillet(1.0))   # so it can be lifted
     for tx in TAB_XS:                                                               # slots for the lid hooks in the antenna-end wall
         b = b.cut(box(tx - TAB_W / 2 - 0.4, tx + TAB_W / 2 + 0.4, WALL_END - LEDGE - TAB_L - 0.3, WALL_END - LEDGE + 0.1, Z_DOOR - 0.05, Z_DOOR + TAB_T + 0.25))
     lx, ly = LID_SCREW                                                              # lid screw: hole and a nut slot opening into the pocket
