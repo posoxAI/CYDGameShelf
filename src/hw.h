@@ -25,7 +25,7 @@ bool bootButton();                 // the BOOT button on the board is held down
 uint32_t ms();
 void sleepMs(uint32_t t);
 
-void toneOn(int freq);
+void toneOn(int freq, int level);  // level 1, 2 or 3: how loud the board should play it
 void toneOff();
 
 // Small numbers kept in flash under short names (up to 15 characters).

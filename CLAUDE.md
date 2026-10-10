@@ -50,7 +50,7 @@ Three places, in step:
 
 ## Settings kept in flash
 
-`hw::saveInt`/`hw::loadInt` over NVS; keys are at most 15 characters. In use: `lang`, `sound`, `flip`, `inv`, `marks`, `pal`, `cc1`…`cc7` (the player's own ball colours, one packed RGB each), `calok` and `cal0`…`cal5` (the touch calibration, each ×65536), `msize`, `mbest0`, `mbest1`, `lbest`, `bbest`. Reuse a key and you silently inherit someone else's value.
+`hw::saveInt`/`hw::loadInt` over NVS; keys are at most 15 characters. In use: `lang`, `vol` (0 silent, 1…3 the loudness steps; `sound` is the older on/off key, still read once so a board that was muted stays muted), `flip`, `inv`, `marks`, `pal`, `cc1`…`cc7` (the player's own ball colours, one packed RGB each), `calok` and `cal0`…`cal5` (the touch calibration, each ×65536), `msize`, `mbest0`, `mbest1`, `lbest`, `bbest`. Reuse a key and you silently inherit someone else's value.
 
 ## Colours on the real panel
 

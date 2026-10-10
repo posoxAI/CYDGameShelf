@@ -12,7 +12,7 @@ std::string outDir = ".";
 static uint16_t fb[hw::W * hw::H];
 static uint32_t now = 0, rng = 1;
 static bool flipped = false, inverted = false;
-static int panel = 0, toneCount = 0;
+static int panel = 0, toneCount = 0, lastLevel = 0;
 static std::map<std::string, int32_t> store;
 static std::string logged;
 struct Tap { uint32_t from, to; int x, y; };
@@ -22,7 +22,7 @@ static std::vector<Shot> shots;
 static uint32_t lastEnd = 0;
 
 void reset(uint32_t seed, bool keepStorage) {
-  now = 0; rng = seed ? seed : 1; flipped = false; inverted = false; toneCount = 0; lastEnd = 0;
+  now = 0; rng = seed ? seed : 1; flipped = false; inverted = false; toneCount = 0; lastLevel = 0; lastEnd = 0;
   taps.clear(); shots.clear(); logged.clear();
   if (!keepStorage) store.clear();
   for (int i = 0; i < hw::W * hw::H; i++) fb[i] = 0;
@@ -36,6 +36,7 @@ void shotAt(uint32_t afterMs, const char* name) { shots.push_back({std::max(last
 uint32_t queuedUntil() { return lastEnd; }
 void setPanel(int kind) { panel = kind; }
 int tones() { return toneCount; }
+int toneLevel() { return lastLevel; }
 std::string logText() { return logged; }
 uint16_t pixel(int x, int y) { return (x >= 0 && y >= 0 && x < hw::W && y < hw::H) ? fb[y * hw::W + x] : 0; }
 void shot(const char* name) {
@@ -110,7 +111,7 @@ bool touchRaw(int& rx, int& ry, int& rz) {
 bool bootButton() { return false; }
 uint32_t ms() { return now; }
 void sleepMs(uint32_t t) { advance(t ? t : 1); }
-void toneOn(int) { toneCount++; }
+void toneOn(int, int level) { toneCount++; sim::lastLevel = level; }
 void toneOff() {}
 int32_t loadInt(const char* key, int32_t fallback) { auto it = store.find(key); return it == store.end() ? fallback : it->second; }
 void saveInt(const char* key, int32_t value) { store[key] = value; }

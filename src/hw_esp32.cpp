@@ -100,11 +100,21 @@ bool bootButton() { return digitalRead(BOOT_BUTTON) == LOW; }
 uint32_t ms() { return millis(); }
 void sleepMs(uint32_t t) { delay(t); }
 
-void toneOn(int freq) {
+// A square wave half the time high is as loud as the pin goes; a narrower pulse carries less energy and
+// the speaker plays it quieter. ledcWriteTone leaves the channel counting to 1023, so 511 is that half and
+// the quieter steps are fractions of it. Loudness against duty is not a straight line and depends on
+// whatever speaker is plugged in: these are a starting point to be moved by ear on the board.
+static const int TONE_DUTY[3] = {6, 56, 511};
+
+void toneOn(int freq, int level) {
+  if (level < 1) level = 1;
+  if (level > 3) level = 3;
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
-  ledcWriteTone(SPEAKER, freq);
+  ledcWriteTone(SPEAKER, freq);                   // sets the frequency, and the duty to half
+  ledcWrite(SPEAKER, TONE_DUTY[level - 1]);       // then the loudness
 #else
   ledcWriteTone(TONE_CHANNEL, freq);
+  ledcWrite(TONE_CHANNEL, TONE_DUTY[level - 1]);
 #endif
 }
 void toneOff() {

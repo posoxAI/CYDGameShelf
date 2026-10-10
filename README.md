@@ -52,7 +52,7 @@ A game stays in memory while you are in the menu or in the other game. It is los
 ## Settings
 
 - Language: RU or EN.
-- Sound: simple tones on the speaker connector. Nothing is heard unless a speaker is plugged in.
+- Sound: simple tones on the speaker connector, in four steps — off, then quiet, middle and loud, shown as a cross and the numbers 1 to 3. The chosen step is heard straight away in the note that confirms the tap. Nothing is heard unless a speaker is plugged in.
 - Screen: turns the picture by 180 degrees.
 - Colours: for boards that show the colours inverted.
 - Ball colours: four rows of colours for the marbles of Five in a Line and the bubbles, shown one above the other at the size they have in the game. Panels differ from board to board, so the readable set is the one that looks readable on yours — pick it there. Three rows are ready-made; the fourth is yours, and tapping it opens a screen where each marble is given a colour out of a grid of squares. Reset puts the first set back. The picking screen also holds Marks: a little sign inside every marble, a dot, a ring, a bar and so on, one for each colour. Marks start on, because these panels render some colours close to each other; turn them off for plain marbles.

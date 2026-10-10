@@ -12,6 +12,7 @@ uint16_t pixel(int x, int y);                         // what is on the screen a
 uint32_t queuedUntil();                               // when the last queued touch ends
 void setPanel(int kind);                              // how the pretend touch panel is glued on: 0, 1 or 2
 int tones();                                          // how many notes have been started
+int toneLevel();                                      // how loud the last of them was asked to be
 std::string logText();
 extern std::string outDir;
 }

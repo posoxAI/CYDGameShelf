@@ -29,7 +29,8 @@ namespace app {
 enum Screen { SCR_MENU, SCR_MINES, SCR_LINES, SCR_BUBBLES, SCR_SETTINGS, SCR_PALETTE, SCR_OWN };
 
 extern int lang;             // 0 Russian, 1 English
-extern bool soundOn, flip, invert;
+extern int soundLevel;       // 0 silent, then 1 quiet, 2 and 3 loudest
+extern bool flip, invert;
 extern bool marks;           // a little sign inside every marble, for telling the colours apart
 extern int palette;          // which set of marble colours, picked on the device by the Marble colours screen
 

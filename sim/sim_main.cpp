@@ -517,6 +517,18 @@ static void testScreens() {
   tap(120, 266); tap(164, 128);
   check(!app::flip, "and flips back");
 
+  // sound: silence and three steps, picked out of a row of four
+  tap(114, 94);
+  check(app::soundLevel == 0, "the first of the sound buttons asks for silence");
+  int quiet = sim::tones();
+  tap(198, 60);                                                // a tap that would otherwise tick
+  check(sim::tones() == quiet && app::lang == 1, "with the sound off nothing is played");
+  tap(147, 94);
+  check(app::soundLevel == 1 && sim::tones() > quiet && sim::toneLevel() == 1, "the second button plays again, at the quietest step");
+  tap(213, 94);
+  check(app::soundLevel == 3 && sim::toneLevel() == 3, "and the fourth asks the board for the loudest");
+  tap(180, 94);                                                // left in the middle: the restart below must find it there
+
   // the sets of marble colours and the marks are picked on their own screen
   tap(120, 201);
   check(app::simScreen() == app::SCR_PALETTE, "Marble colours opens the picking screen");
@@ -574,7 +586,8 @@ static void testScreens() {
   powerOff();
   sim::reset(9, true);
   app::setup(); run(100);
-  check(app::simScreen() == app::SCR_MENU && app::lang == 1, "after a restart the calibration and the language are remembered");
+  check(app::simScreen() == app::SCR_MENU && app::lang == 1 && app::soundLevel == 2,
+        "after a restart the calibration, the language and the sound step are remembered");
   tap(120, 100);
   check(app::simScreen() == app::SCR_MINES, "and the stored calibration still works");
 

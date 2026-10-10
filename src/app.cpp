@@ -5,7 +5,8 @@
 namespace app {
 
 int lang = 0;
-bool soundOn = true, flip = false, invert = false;
+int soundLevel = 3;
+bool flip = false, invert = false;
 bool marks = true;
 int palette = 0;
 Touch touch = {false, false, false, false, false, 0, 0, 0, 0, 0};
@@ -247,7 +248,10 @@ static void updateMenu() {
 /* ---------- settings ---------- */
 
 static const int ROW_Y[4] = {44, 78, 112, 146};
-static const ui::Rect SET_RU = {100, 44, 60, 32}, SET_EN = {168, 44, 60, 32}, SET_SOUND = {100, 78, 128, 32},
+// The sound row is four buttons of the same size: silence, then three steps up. Silence is a cross and the
+// steps are numbered, because four worded captions in two languages do not fit a row 128 pixels wide.
+static const ui::Rect SET_SOUND[4] = {{100, 78, 29, 32}, {133, 78, 29, 32}, {166, 78, 29, 32}, {199, 78, 29, 32}};
+static const ui::Rect SET_RU = {100, 44, 60, 32}, SET_EN = {168, 44, 60, 32},
                       SET_FLIP = {100, 112, 128, 32}, SET_INV = {100, 146, 128, 32},
                       SET_PAL = {12, 186, 216, 30}, SET_CAL = {12, 220, 216, 30},
                       SET_RESET = {12, 254, 216, 30}, SET_BACK = {12, 288, 216, 30};
@@ -256,6 +260,23 @@ static bool resetDone = false;
 
 static void toggle(const ui::Rect& r, const char* text, bool on) {
   ui::button(r.x, r.y, r.w, r.h, text, FONT_M, on ? C_ON_ACCENT : C_INK, on ? C_ACCENT : C_PANEL);
+}
+// Button k of the sound row: a cross for silence, then the number of the step.
+static void drawSoundStep(int k) {
+  const ui::Rect& r = SET_SOUND[k];
+  bool on = soundLevel == k;
+  uint16_t ink = on ? C_ON_ACCENT : C_INK;
+  if (k) {
+    char num[4];
+    snprintf(num, sizeof num, "%d", k);
+    toggle(r, num, on);
+    return;
+  }
+  hw::fillRoundRect(r.x, r.y, r.w, r.h, 5, on ? C_ACCENT : C_PANEL);
+  for (int d = 0; d < 2; d++) {        // twice, a pixel apart, because a one-pixel line all but disappears
+    hw::drawLine(r.x + 9 + d, r.y + 10, r.x + 20 + d, r.y + 21, ink);
+    hw::drawLine(r.x + 20 + d, r.y + 10, r.x + 9 + d, r.y + 21, ink);
+  }
 }
 static void drawReset() {
   bool armed = resetArmedAt != 0;
@@ -270,7 +291,7 @@ static void drawSettings() {
   for (int k = 0; k < 4; k++) ui::label(12, ROW_Y[k], 86, 32, T(names[k]), FONT_M, C_MUTED, C_BG, ui::LEFT);
   toggle(SET_RU, "RU", lang == 0);
   toggle(SET_EN, "EN", lang == 1);
-  toggle(SET_SOUND, T(soundOn ? S_ON : S_OFF), soundOn);
+  for (int k = 0; k < 4; k++) drawSoundStep(k);
   toggle(SET_FLIP, T(S_FLIP), flip);
   toggle(SET_INV, T(invert ? S_INVERTED : S_NORMAL), invert);
   toggle(SET_PAL, T(S_PAL_TITLE), false);
@@ -290,8 +311,11 @@ static void updateSettings() {
     return;
   }
   resetArmedAt = 0;
+  int picked = -1;
+  for (int k = 0; k < 4; k++) if (SET_SOUND[k].has(x, y)) picked = k;
   if (SET_RU.has(x, y) || SET_EN.has(x, y)) { lang = SET_EN.has(x, y) ? 1 : 0; hw::saveInt("lang", lang); }
-  else if (SET_SOUND.has(x, y)) { soundOn = !soundOn; hw::saveInt("sound", soundOn); }
+  // the note that confirms the tap is played at the step just chosen, so the choice is heard as it is made
+  else if (picked >= 0) { soundLevel = picked; hw::saveInt("vol", soundLevel); }
   else if (SET_FLIP.has(x, y)) { flip = !flip; hw::saveInt("flip", flip); hw::setFlip(flip); }
   else if (SET_INV.has(x, y)) { invert = !invert; hw::saveInt("inv", invert); hw::setInvert(invert); }
   else if (SET_PAL.has(x, y)) { snd::play(880, 25); go(SCR_PALETTE); return; }
@@ -453,7 +477,9 @@ void go(Screen s) {
 void setup() {
   hw::begin();
   lang = hw::loadInt("lang", -1);
-  soundOn = hw::loadInt("sound", 1) != 0;
+  // "sound" is the older on/off key: a board that had the sound off keeps it off, one that had it on plays loudest
+  soundLevel = hw::loadInt("vol", hw::loadInt("sound", 1) != 0 ? 3 : 0);
+  if (soundLevel < 0 || soundLevel > 3) soundLevel = 3;
   flip = hw::loadInt("flip", 0) != 0;
   invert = hw::loadInt("inv", 0) != 0;
   marks = hw::loadInt("marks", 1) != 0;
@@ -514,7 +540,7 @@ static bool sounding = false;
 static uint32_t endAt = 0;
 
 void note(int freq, int ms) {
-  if (!app::soundOn || count >= 8) return;
+  if (!app::soundLevel || count >= 8) return;
   queue[(head + count) % 8].freq = freq;
   queue[(head + count) % 8].ms = ms;
   count++;
@@ -531,7 +557,7 @@ void tick() {
   if (!sounding && count) {
     Note n = queue[head];
     head = (head + 1) % 8; count--;
-    if (n.freq > 0) hw::toneOn(n.freq);
+    if (n.freq > 0) hw::toneOn(n.freq, app::soundLevel);
     sounding = true; endAt = now + n.ms;      // a zero frequency is a rest
   }
 }
